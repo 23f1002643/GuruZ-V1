@@ -1,0 +1,76 @@
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# compiled output
+dist
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
+
+# dependencies
+node_modules
+
+# Local environments, runtime data, logs, and caches
+.env
+.env.*
+!.env.example
+*.log
+*.err.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+backend/data/
+data/
+
+# Uploaded/reference materials are kept locally, not in source control
+attached_assets/
+*.pdf
+# venv
+venv/
+
+# One-off local diagnostics
+/backend/check_*.py
+/backend/fetch_*_logs.py
+/backend/print_last_logs.py
+/backend/search_lesson_fail.py
+/backend/test_upload.py
+/backend/watch_logs.py
+/backend_test_package.py
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
+.DS_Store
+Thumbs.db
+
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
+
+# Replit
+.cache/
+.local/

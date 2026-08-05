@@ -1,0 +1,36 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# LLM
+google-generativeai==0.8.3
+langchain==0.3.13
+langchain-google-genai==2.0.7
+langchain-community==0.3.13
+langgraph==0.2.60
+langchain-ollama==0.2.2
+
+# RAG
+llama-index==0.12.3
+llama-index-vector-stores-chroma==0.4.1
+llama-index-embeddings-huggingface==0.4.0
+chromadb==0.5.23
+sentence-transformers==3.3.1
+
+# Document parsing
+PyMuPDF==1.25.1
+python-docx==1.1.2
+python-pptx==1.0.2
+
+# Utilities
+python-dotenv==1.0.1
+reportlab==5.0.0
+tenacity>=8.2,<9
+structlog==24.4.0
+aiofiles==24.1.0
+httpx==0.28.1
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1

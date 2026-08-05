@@ -1,0 +1,1148 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: AI Teacher Platform API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: upload
+    description: Document upload
+  - name: jobs
+    description: Processing jobs
+  - name: packages
+    description: Teacher Knowledge Packages
+  - name: logs
+    description: System logs
+  - name: settings
+    description: Platform settings
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /health/detailed:
+    get:
+      operationId: detailedHealthCheck
+      tags: [health]
+      summary: Detailed health check
+      description: Returns detailed system health including LLM and database status
+      responses:
+        "200":
+          description: Detailed health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailedHealth"
+
+  /upload:
+    post:
+      operationId: uploadDocument
+      tags: [upload]
+      summary: Upload educational document
+      description: Upload a PDF, DOCX, PPT, or TXT document for AI processing
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/DocumentUpload"
+      responses:
+        "202":
+          description: Upload accepted, processing started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCreated"
+        "400":
+          description: Invalid file or request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List all processing jobs
+      description: Returns all document processing jobs with their status
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: ["pending", "processing", "completed", "failed", "cancelled", null]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 50
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+
+  /jobs/{job_id}:
+    get:
+      operationId: getJob
+      tags: [jobs]
+      summary: Get job details
+      description: Returns detailed status and progress of a specific processing job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: cancelJob
+      tags: [jobs]
+      summary: Cancel a processing job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /jobs/{job_id}/events:
+    get:
+      operationId: streamJobEvents
+      tags: [jobs]
+      summary: Stream job progress events (SSE)
+      description: Server-sent events stream for real-time job progress updates
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SSE stream of progress events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /packages:
+    get:
+      operationId: listPackages
+      tags: [packages]
+      summary: List all Teacher Knowledge Packages
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 50
+        - name: subject
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of packages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PackageSummary"
+
+  /packages/{package_id}:
+    get:
+      operationId: getPackage
+      tags: [packages]
+      summary: Get full Teacher Knowledge Package
+      parameters:
+        - name: package_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Full package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeacherKnowledgePackage"
+        "404":
+          description: Package not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deletePackage
+      tags: [packages]
+      summary: Delete a Teacher Knowledge Package
+      parameters:
+        - name: package_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Package deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Package not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /packages/stats/summary:
+    get:
+      operationId: getPackageStats
+      tags: [packages]
+      summary: Get package statistics summary
+      description: Returns aggregated stats across all packages
+      responses:
+        "200":
+          description: Package stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageStats"
+
+  /logs:
+    get:
+      operationId: getLogs
+      tags: [logs]
+      summary: Get recent system logs
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 100
+        - name: level
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: ["debug", "info", "warning", "error", "critical", null]
+        - name: job_id
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LogEntry"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get current platform settings
+      responses:
+        "200":
+          description: Current settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update platform settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    DetailedHealth:
+      type: object
+      properties:
+        status:
+          type: string
+        version:
+          type: string
+        llm_provider:
+          type: string
+        llm_status:
+          type: string
+        chromadb_status:
+          type: string
+        uptime_seconds:
+          type: number
+        total_jobs:
+          type: number
+        active_jobs:
+          type: number
+      required:
+        - status
+        - version
+        - llm_provider
+        - llm_status
+        - chromadb_status
+        - uptime_seconds
+        - total_jobs
+        - active_jobs
+
+    DocumentUpload:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+        language:
+          type: ["string", "null"]
+          default: "English"
+      required:
+        - file
+
+    JobCreated:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+        filename:
+          type: string
+      required:
+        - job_id
+        - status
+        - message
+        - filename
+
+    StageProgress:
+      type: object
+      properties:
+        stage:
+          type: string
+        stage_index:
+          type: number
+        total_stages:
+          type: number
+        progress:
+          type: number
+        message:
+          type: string
+        started_at:
+          type: ["string", "null"]
+        completed_at:
+          type: ["string", "null"]
+      required:
+        - stage
+        - stage_index
+        - total_stages
+        - progress
+        - message
+
+    Job:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: ["pending", "processing", "completed", "failed", "cancelled"]
+        filename:
+          type: string
+        file_size:
+          type: ["number", "null"]
+        file_type:
+          type: ["string", "null"]
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        completed_at:
+          type: ["string", "null"]
+        current_stage:
+          type: ["string", "null"]
+        overall_progress:
+          type: number
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/StageProgress"
+        error:
+          type: ["string", "null"]
+        package_id:
+          type: ["string", "null"]
+        processing_time_seconds:
+          type: ["number", "null"]
+      required:
+        - job_id
+        - status
+        - filename
+        - created_at
+        - updated_at
+        - overall_progress
+        - stages
+
+    PackageSummary:
+      type: object
+      properties:
+        package_id:
+          type: string
+        job_id:
+          type: string
+        filename:
+          type: string
+        created_at:
+          type: string
+        subject:
+          type: ["string", "null"]
+        topic:
+          type: ["string", "null"]
+        grade:
+          type: ["string", "null"]
+        difficulty:
+          type: ["string", "null"]
+        language:
+          type: ["string", "null"]
+        total_periods:
+          type: ["number", "null"]
+        total_assessments:
+          type: ["number", "null"]
+        validation_score:
+          type: ["number", "null"]
+      required:
+        - package_id
+        - job_id
+        - filename
+        - created_at
+
+    TeacherKnowledgePackage:
+      type: object
+      properties:
+        package_id:
+          type: string
+        job_id:
+          type: string
+        filename:
+          type: string
+        created_at:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/DocumentMetadata"
+        learning_objectives:
+          type: array
+          items:
+            type: string
+        prerequisites:
+          type: array
+          items:
+            type: string
+        concepts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Concept"
+        definitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Definition"
+        formulae:
+          type: array
+          items:
+            $ref: "#/components/schemas/Formula"
+        examples:
+          type: array
+          items:
+            $ref: "#/components/schemas/Example"
+        applications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Application"
+        teaching_plan:
+          $ref: "#/components/schemas/TeachingPlan"
+        lessons:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lesson"
+        activities:
+          type: array
+          items:
+            $ref: "#/components/schemas/Activity"
+        assessments:
+          $ref: "#/components/schemas/AssessmentBank"
+        misconceptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Misconception"
+        validation_report:
+          $ref: "#/components/schemas/ValidationReport"
+      required:
+        - package_id
+        - job_id
+        - filename
+        - created_at
+        - metadata
+        - learning_objectives
+        - prerequisites
+        - concepts
+        - definitions
+        - formulae
+        - examples
+        - applications
+
+    DocumentMetadata:
+      type: object
+      properties:
+        subject:
+          type: string
+        topic:
+          type: string
+        chapter:
+          type: ["string", "null"]
+        grade:
+          type: string
+        difficulty:
+          type: string
+          enum: ["beginner", "intermediate", "advanced"]
+        category:
+          type: string
+          enum: ["STEM", "Humanities", "Social Sciences", "Arts", "Physical Education", "Other"]
+        language:
+          type: string
+        total_pages:
+          type: ["number", "null"]
+        word_count:
+          type: ["number", "null"]
+        key_themes:
+          type: array
+          items:
+            type: string
+        keywords:
+          type: array
+          items:
+            type: string
+      required:
+        - subject
+        - topic
+        - grade
+        - difficulty
+        - category
+        - language
+
+    Concept:
+      type: object
+      properties:
+        name:
+          type: string
+        explanation:
+          type: string
+        importance:
+          type: string
+          enum: ["core", "supporting", "supplementary"]
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - explanation
+        - importance
+
+    Definition:
+      type: object
+      properties:
+        term:
+          type: string
+        definition:
+          type: string
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - term
+        - definition
+
+    Formula:
+      type: object
+      properties:
+        name:
+          type: string
+        expression:
+          type: string
+        description:
+          type: string
+        variables:
+          type: array
+          items:
+            type: string
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - expression
+        - description
+
+    Example:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - title
+        - description
+
+    Application:
+      type: object
+      properties:
+        domain:
+          type: string
+        description:
+          type: string
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - domain
+        - description
+
+    TeachingPlan:
+      type: object
+      properties:
+        total_periods:
+          type: number
+        period_duration_minutes:
+          type: number
+        overview:
+          type: string
+        period_plan:
+          type: array
+          items:
+            $ref: "#/components/schemas/PeriodSummary"
+      required:
+        - total_periods
+        - period_duration_minutes
+        - overview
+        - period_plan
+
+    PeriodSummary:
+      type: object
+      properties:
+        period_number:
+          type: number
+        title:
+          type: string
+        objectives:
+          type: array
+          items:
+            type: string
+        topics:
+          type: array
+          items:
+            type: string
+      required:
+        - period_number
+        - title
+        - objectives
+        - topics
+
+    Lesson:
+      type: object
+      properties:
+        period_number:
+          type: number
+        title:
+          type: string
+        duration_minutes:
+          type: number
+        objectives:
+          type: array
+          items:
+            type: string
+        entry_ticket:
+          type: string
+        teacher_script:
+          type: string
+        blackboard_notes:
+          type: string
+        classroom_activities:
+          type: array
+          items:
+            type: string
+        checkpoint_questions:
+          type: array
+          items:
+            type: string
+        exit_ticket:
+          type: string
+        homework:
+          type: string
+        mentor_moment:
+          type: string
+      required:
+        - period_number
+        - title
+        - duration_minutes
+        - objectives
+        - entry_ticket
+        - teacher_script
+        - blackboard_notes
+        - classroom_activities
+        - checkpoint_questions
+        - exit_ticket
+        - homework
+        - mentor_moment
+
+    Activity:
+      type: object
+      properties:
+        title:
+          type: string
+        activity_type:
+          type: string
+          enum: ["demonstration", "role_play", "experiment", "discussion", "project", "game", "field_work", "group_work"]
+        duration_minutes:
+          type: number
+        materials:
+          type: array
+          items:
+            type: string
+        teacher_instructions:
+          type: string
+        student_instructions:
+          type: string
+        success_criteria:
+          type: array
+          items:
+            type: string
+        learning_objectives:
+          type: array
+          items:
+            type: string
+      required:
+        - title
+        - activity_type
+        - duration_minutes
+        - materials
+        - teacher_instructions
+        - student_instructions
+        - success_criteria
+        - learning_objectives
+
+    AssessmentBank:
+      type: object
+      properties:
+        total_questions:
+          type: number
+        mcqs:
+          type: array
+          items:
+            $ref: "#/components/schemas/MCQ"
+        short_answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShortAnswer"
+        long_answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/LongAnswer"
+        numerical:
+          type: array
+          items:
+            $ref: "#/components/schemas/NumericalProblem"
+      required:
+        - total_questions
+        - mcqs
+        - short_answers
+        - long_answers
+        - numerical
+
+    MCQ:
+      type: object
+      properties:
+        question_id:
+          type: string
+        question:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+        correct_option:
+          type: number
+        explanation:
+          type: string
+        difficulty:
+          type: string
+          enum: ["easy", "medium", "hard"]
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - question_id
+        - question
+        - options
+        - correct_option
+        - explanation
+        - difficulty
+
+    ShortAnswer:
+      type: object
+      properties:
+        question_id:
+          type: string
+        question:
+          type: string
+        model_answer:
+          type: string
+        rubric:
+          type: string
+        marks:
+          type: number
+        difficulty:
+          type: string
+          enum: ["easy", "medium", "hard"]
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - question_id
+        - question
+        - model_answer
+        - rubric
+        - marks
+        - difficulty
+
+    LongAnswer:
+      type: object
+      properties:
+        question_id:
+          type: string
+        question:
+          type: string
+        model_answer:
+          type: string
+        rubric:
+          type: string
+        marks:
+          type: number
+        difficulty:
+          type: string
+          enum: ["easy", "medium", "hard"]
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - question_id
+        - question
+        - model_answer
+        - rubric
+        - marks
+        - difficulty
+
+    NumericalProblem:
+      type: object
+      properties:
+        question_id:
+          type: string
+        question:
+          type: string
+        solution_steps:
+          type: array
+          items:
+            type: string
+        final_answer:
+          type: string
+        marks:
+          type: number
+        difficulty:
+          type: string
+          enum: ["easy", "medium", "hard"]
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - question_id
+        - question
+        - solution_steps
+        - final_answer
+        - marks
+        - difficulty
+
+    Misconception:
+      type: object
+      properties:
+        misconception:
+          type: string
+        correct_understanding:
+          type: string
+        severity:
+          type: string
+          enum: ["low", "medium", "high"]
+        diagnostic_question:
+          type: string
+        remedial_action:
+          type: string
+        source_chunks:
+          type: array
+          items:
+            type: string
+      required:
+        - misconception
+        - correct_understanding
+        - severity
+        - diagnostic_question
+        - remedial_action
+
+    ValidationReport:
+      type: object
+      properties:
+        is_valid:
+          type: boolean
+        overall_score:
+          type: number
+        hallucination_score:
+          type: number
+        schema_valid:
+          type: boolean
+        all_objectives_covered:
+          type: boolean
+        source_chunks_verified:
+          type: boolean
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationIssue"
+        regeneration_count:
+          type: number
+      required:
+        - is_valid
+        - overall_score
+        - hallucination_score
+        - schema_valid
+        - all_objectives_covered
+        - source_chunks_verified
+        - issues
+        - regeneration_count
+
+    ValidationIssue:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum: ["error", "warning", "info"]
+        field:
+          type: string
+        message:
+          type: string
+      required:
+        - severity
+        - field
+        - message
+
+    PackageStats:
+      type: object
+      properties:
+        total_packages:
+          type: number
+        total_jobs:
+          type: number
+        completed_jobs:
+          type: number
+        failed_jobs:
+          type: number
+        avg_processing_time_seconds:
+          type: ["number", "null"]
+        subjects:
+          type: array
+          items:
+            type: string
+        recent_packages:
+          type: array
+          items:
+            $ref: "#/components/schemas/PackageSummary"
+      required:
+        - total_packages
+        - total_jobs
+        - completed_jobs
+        - failed_jobs
+        - subjects
+        - recent_packages
+
+    LogEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+        level:
+          type: string
+          enum: ["debug", "info", "warning", "error", "critical"]
+        message:
+          type: string
+        job_id:
+          type: ["string", "null"]
+        stage:
+          type: ["string", "null"]
+        extra:
+          type: object
+          additionalProperties: true
+      required:
+        - timestamp
+        - level
+        - message
+
+    Settings:
+      type: object
+      properties:
+        llm_provider:
+          type: string
+          enum: ["auto", "gemini", "ollama"]
+        ollama_model:
+          type: string
+        ollama_base_url:
+          type: string
+        gemini_model:
+          type: string
+        chunk_size:
+          type: number
+        chunk_overlap:
+          type: number
+        max_retry_attempts:
+          type: number
+        period_duration_minutes:
+          type: number
+        default_language:
+          type: string
+      required:
+        - llm_provider
+        - ollama_model
+        - ollama_base_url
+        - gemini_model
+        - chunk_size
+        - chunk_overlap
+        - max_retry_attempts
+        - period_duration_minutes
+        - default_language
+
+    SettingsUpdate:
+      type: object
+      properties:
+        llm_provider:
+          type: ["string", "null"]
+          enum: ["auto", "gemini", "ollama", null]
+        ollama_model:
+          type: ["string", "null"]
+        ollama_base_url:
+          type: ["string", "null"]
+        gemini_model:
+          type: ["string", "null"]
+        chunk_size:
+          type: ["number", "null"]
+        chunk_overlap:
+          type: ["number", "null"]
+        max_retry_attempts:
+          type: ["number", "null"]
+        period_duration_minutes:
+          type: ["number", "null"]
+        default_language:
+          type: ["string", "null"]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: ["string", "null"]
+      required:
+        - error
