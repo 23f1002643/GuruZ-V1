@@ -5,6 +5,8 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 import uuid
 
+from app.schemas.validation_report import ValidationIssue, ValidationReport
+
 
 class Concept(BaseModel):
     name: str
@@ -221,24 +223,6 @@ class Misconception(BaseModel):
     diagnostic_question: str
     remedial_action: str
     source_chunks: list[str] = Field(default_factory=list)
-
-
-class ValidationIssue(BaseModel):
-    severity: Literal["error", "warning", "info"]
-    field: str
-    message: str
-
-
-class ValidationReport(BaseModel):
-    is_valid: bool = False
-    overall_score: float = 0.0
-    hallucination_score: float = 0.0
-    completeness_score: float = 0.0
-    schema_valid: bool = False
-    all_objectives_covered: bool = False
-    source_chunks_verified: bool = False
-    issues: list[ValidationIssue] = Field(default_factory=list)
-    regeneration_count: int = 0
 
 
 class TeacherKnowledgePackage(BaseModel):

@@ -12,14 +12,14 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 SYSTEM = """You are a master teacher creating detailed, engaging lesson plans.
-Use ONLY content from the provided subject-matter material.
-Never invent examples or explanations not present in the source.
+Use only content from the provided subject-matter material.
+Never invent examples, explanations, formulas, or diagrams that are not present in the source.
 Write naturally, as a professional teacher would.
-Write ALL content in the language specified in LANGUAGE field. Do NOT mix languages.
-Do NOT reference the source document, context, or say phrases like 'according to the document', 'based on the provided material', 'the text says', etc. Write as if the knowledge is yours.
-Respond ONLY with valid JSON."""
+Write all output in the LANGUAGE specified. Do not mix languages.
+Do not mention the source document, context labels, or phrases like 'according to the document'.
+Respond only with valid JSON."""
 
-PERIOD_PROMPT = """Create a detailed lesson plan for Period {period_number}: "{period_title}".
+PROMPT_TEMPLATE = """Generate a single lesson plan for Period {period_number}: \"{period_title}\".
 
 SUBJECT: {subject}
 TOPIC: {topic}
@@ -29,11 +29,10 @@ LANGUAGE: {language}
 PERIOD OBJECTIVES:
 {objectives}
 
-RELEVANT MATERIAL:
+RELEVANT SOURCE PASSAGES:
 {context}
 
-Return ONLY valid JSON in this exact format:
-
+Return exactly one valid JSON object in this format:
 {{
   "period_number": {period_number},
   "title": "{period_title}",
@@ -43,18 +42,22 @@ Return ONLY valid JSON in this exact format:
     "Objective 2"
   ],
   "entry_ticket": "Warm-up activity",
-  "teacher_script": "Detailed teacher script (minimum 300 words)",
+  "teacher_script": "Concise, classroom-ready teacher script.",
   "blackboard_notes": {{
       "main_definition": "Definition",
       "key_points": [
           "Point 1",
           "Point 2"
       ],
-      "formula": "Formula if applicable",
+      "formulas": [
+          "Formula if applicable"
+      ],
       "examples": [
           "Example"
       ],
-      "diagram": "Diagram description if needed"
+      "diagrams": [
+          "Diagram description if directly supported by the source"
+      ]
   }},
   "classroom_activities": [
       "Activity 1",
@@ -68,13 +71,24 @@ Return ONLY valid JSON in this exact format:
   "homework": "Homework",
   "mentor_moment": "Motivational story"
 }}
+
+Rules:
+- Use only the information in RELEVANT SOURCE PASSAGES.
+- If the source does not explicitly provide a definition, formula, example, or diagram, use an empty string or empty list.
+- Keep teacher_script practical and classroom-ready, around 200-250 words.
+- Keep blackboard_notes concise and directly tied to the source.
+- Return JSON only. Do not include markdown fences, commentary, or additional keys.
 """
+
+MAX_CONTEXT_CHUNKS = 4
+MAX_CONTEXT_CHARS = 1000
+TOP_K_CHUNKS = 5
 
 
 class LessonGeneratorAgent(BaseAgent):
     name = "lesson_generator"
-    temperature = 0.3
-    max_tokens = 7000
+    temperature = 0.2
+    max_tokens = 2500
 
     def _ensure_string(self, value: Any) -> str:
         """Convert any value into a readable string."""
@@ -89,16 +103,13 @@ class LessonGeneratorAgent(BaseAgent):
 
         if isinstance(value, dict):
             lines = []
-
             for key, val in value.items():
                 title = key.replace("_", " ").title()
-
                 if isinstance(val, list):
                     lines.append(f"{title}:")
                     lines.extend(f"• {x}" for x in val)
                 else:
                     lines.append(f"{title}: {val}")
-
             return "\n".join(lines)
 
         return str(value)
@@ -119,6 +130,39 @@ class LessonGeneratorAgent(BaseAgent):
 
         return [str(value)]
 
+    def _normalize_blackboard_notes(self, value: Any) -> dict[str, Any]:
+        """Normalize blackboard note output into the expected schema shape."""
+        if not isinstance(value, dict):
+            return {
+                "main_definition": "",
+                "key_points": [],
+                "formulas": [],
+                "examples": [],
+                "diagrams": [],
+            }
+
+        return {
+            "main_definition": str(value.get("main_definition") or ""),
+            "key_points": [str(x) for x in (value.get("key_points") or []) if x],
+            "formulas": [str(x) for x in (value.get("formulas") or []) if x],
+            "examples": [str(x) for x in (value.get("examples") or []) if x],
+            "diagrams": [str(x) for x in (value.get("diagrams") or []) if x],
+        }
+
+    def build_rag_context(self, chunks: list[str]) -> str:
+        """Trim and format retrieved chunks for a smaller prompt footprint."""
+        if not chunks:
+            return "No relevant source passages are available."
+
+        passages: list[str] = []
+        for index, chunk in enumerate(chunks[:MAX_CONTEXT_CHUNKS]):
+            text = chunk.strip().replace("\n", " ")
+            if len(text) > MAX_CONTEXT_CHARS:
+                text = text[:MAX_CONTEXT_CHARS].rsplit(" ", 1)[0] + "..."
+            passages.append(f"[Passage {index + 1}]\n{text}")
+
+        return "\n\n".join(passages)
+
     async def run(
         self,
         metadata: DocumentMetadata,
@@ -136,25 +180,27 @@ class LessonGeneratorAgent(BaseAgent):
         )
 
         total = len(teaching_plan.period_plan)
-        lessons = []
+        lessons: list[Lesson] = []
 
         for idx, period in enumerate(teaching_plan.period_plan):
-
             if progress_cb:
                 pct = int(((idx) / max(total, 1)) * 90) + 10
                 progress_cb(pct, f"Generating lesson {idx + 1}/{total}: {period.title}")
 
-            query = " ".join(period.topics + [period.title, metadata.topic])
-
-            chunks = retrieve(job_id, query, top_k=10)
-
-            context = self.build_rag_context(chunks)
-
-            objectives_str = "\n".join(
-                f"- {o}" for o in period.objectives
+            query = " ".join(
+                [metadata.subject, metadata.topic, period.title, *period.topics]
+            )
+            chunks = retrieve(job_id, query, top_k=TOP_K_CHUNKS)
+            logger.info(
+                "retrieval_context",
+                job_id=job_id,
+                period=period.period_number,
+                chunks=len(chunks),
             )
 
-            prompt = PERIOD_PROMPT.format(
+            context = self.build_rag_context(chunks)
+            objectives_str = "\n".join(f"- {o}" for o in period.objectives)
+            prompt = PROMPT_TEMPLATE.format(
                 period_number=period.period_number,
                 period_title=period.title,
                 subject=metadata.subject,
@@ -166,13 +212,20 @@ class LessonGeneratorAgent(BaseAgent):
                 context=context,
             )
 
-            data = await self.call_llm_json(prompt, SYSTEM)
+            try:
+                data = await self.call_llm_json(prompt, SYSTEM)
+            except Exception as exc:
+                logger.error(
+                    "lesson_generation_failed",
+                    job_id=job_id,
+                    period=period.period_number,
+                    error=str(exc),
+                )
+                raise
 
             lesson = Lesson(
                 period_number=period.period_number,
-                title=self._ensure_string(
-                    data.get("title", period.title)
-                ),
+                title=self._ensure_string(data.get("title", period.title)),
                 duration_minutes=int(
                     data.get(
                         "duration_minutes",
@@ -182,14 +235,10 @@ class LessonGeneratorAgent(BaseAgent):
                 objectives=self._ensure_list(
                     data.get("objectives", period.objectives)
                 ),
-                entry_ticket=self._ensure_string(
-                    data.get("entry_ticket", "")
-                ),
-                teacher_script=self._ensure_string(
-                    data.get("teacher_script", "")
-                ),
-                blackboard_notes=self._ensure_string(
-                    data.get("blackboard_notes", "")
+                entry_ticket=self._ensure_string(data.get("entry_ticket", "")),
+                teacher_script=self._ensure_string(data.get("teacher_script", "")),
+                blackboard_notes=self._normalize_blackboard_notes(
+                    data.get("blackboard_notes", {})
                 ),
                 classroom_activities=self._ensure_list(
                     data.get("classroom_activities", [])
@@ -197,19 +246,12 @@ class LessonGeneratorAgent(BaseAgent):
                 checkpoint_questions=self._ensure_list(
                     data.get("checkpoint_questions", [])
                 ),
-                exit_ticket=self._ensure_string(
-                    data.get("exit_ticket", "")
-                ),
-                homework=self._ensure_string(
-                    data.get("homework", "")
-                ),
-                mentor_moment=self._ensure_string(
-                    data.get("mentor_moment", "")
-                ),
+                exit_ticket=self._ensure_string(data.get("exit_ticket", "")),
+                homework=self._ensure_string(data.get("homework", "")),
+                mentor_moment=self._ensure_string(data.get("mentor_moment", "")),
             )
 
             lessons.append(lesson)
-
             logger.info(
                 "lesson_generated",
                 period=period.period_number,

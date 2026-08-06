@@ -22,6 +22,18 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 64
 
+    # Generation controls
+    max_generation_tokens: int = 2000
+    top_k_retrieval_chunks: int = 4
+    max_context_chars: int = 7000
+    teacher_script_length: Literal["short", "medium", "long"] = "medium"
+    lesson_detail_level: Literal["concise", "balanced", "detailed"] = "balanced"
+    creativity_temperature: float = 0.3
+    strict_rag_mode: bool = False
+    enable_mentor_story: bool = True
+    enable_diagrams: bool = True
+    enable_formulas: bool = True
+
     # Processing
     max_retry_attempts: int = 3
     period_duration_minutes: int = 40

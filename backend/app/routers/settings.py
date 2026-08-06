@@ -22,6 +22,16 @@ class SettingsUpdate(BaseModel):
     max_retry_attempts: Optional[int] = None
     period_duration_minutes: Optional[int] = None
     default_language: Optional[str] = None
+    max_generation_tokens: Optional[int] = None
+    top_k_retrieval_chunks: Optional[int] = None
+    max_context_chars: Optional[int] = None
+    teacher_script_length: Optional[Literal["short", "medium", "long"]] = None
+    lesson_detail_level: Optional[Literal["concise", "balanced", "detailed"]] = None
+    creativity_temperature: Optional[float] = None
+    strict_rag_mode: Optional[bool] = None
+    enable_mentor_story: Optional[bool] = None
+    enable_diagrams: Optional[bool] = None
+    enable_formulas: Optional[bool] = None
 
 
 @router.get("")
@@ -37,6 +47,16 @@ async def get_settings_endpoint():
         "max_retry_attempts": _overrides.get("max_retry_attempts", s.max_retry_attempts),
         "period_duration_minutes": _overrides.get("period_duration_minutes", s.period_duration_minutes),
         "default_language": _overrides.get("default_language", s.default_language),
+        "max_generation_tokens": _overrides.get("max_generation_tokens", s.max_generation_tokens),
+        "top_k_retrieval_chunks": _overrides.get("top_k_retrieval_chunks", s.top_k_retrieval_chunks),
+        "max_context_chars": _overrides.get("max_context_chars", s.max_context_chars),
+        "teacher_script_length": _overrides.get("teacher_script_length", s.teacher_script_length),
+        "lesson_detail_level": _overrides.get("lesson_detail_level", s.lesson_detail_level),
+        "creativity_temperature": _overrides.get("creativity_temperature", s.creativity_temperature),
+        "strict_rag_mode": _overrides.get("strict_rag_mode", s.strict_rag_mode),
+        "enable_mentor_story": _overrides.get("enable_mentor_story", s.enable_mentor_story),
+        "enable_diagrams": _overrides.get("enable_diagrams", s.enable_diagrams),
+        "enable_formulas": _overrides.get("enable_formulas", s.enable_formulas),
     }
 
 
@@ -46,10 +66,15 @@ async def update_settings_endpoint(update: SettingsUpdate):
     data = update.model_dump(exclude_none=True)
     _overrides.update(data)
 
+    # Apply runtime updates directly to the in-memory settings object.
+    settings = get_settings()
+    for key, value in data.items():
+        if hasattr(settings, key):
+            setattr(settings, key, value)
+
     # If LLM provider changed, reset the router so it re-detects
     if "llm_provider" in data:
-        get_settings().llm_provider = data["llm_provider"]  # type: ignore[assignment]
         get_llm_router().reset()
-        logger.info("settings_updated", changes=data)
 
+    logger.info("settings_updated", changes=data)
     return await get_settings_endpoint()

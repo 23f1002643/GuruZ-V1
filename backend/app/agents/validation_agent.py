@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Callable, Optional
 from app.agents.base_agent import BaseAgent
 from app.rag.retriever import retrieve_all
-from app.schemas.teacher_package import TeacherKnowledgePackage, ValidationReport, ValidationIssue
+from app.schemas.teacher_package import TeacherKnowledgePackage, ValidationIssue
+from app.schemas.validation_report import ValidationReport
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -41,6 +42,9 @@ Check for:
 3. Missing objectives: important topics not covered
 4. Schema validity: all required fields present
 5. Source chunk existence: references are grounded
+6. JSON validity: output is structured correctly and no fields are malformed
+7. Educational quality: content is appropriate for the target grade and lesson objective
+8. Consistency: package sections do not contradict each other
 
 Return a JSON object:
 {{
@@ -48,6 +52,10 @@ Return a JSON object:
   "schema_valid": true,
   "all_objectives_covered": true,
   "source_chunks_verified": true,
+  "completeness_score": 0.95,
+  "json_validity_score": 1.0,
+  "educational_quality_score": 0.9,
+  "consistency_score": 0.92,
   "issues": [
     {{
       "severity": "error | warning | info",
@@ -58,7 +66,11 @@ Return a JSON object:
   "validation_notes": "Overall assessment"
 }}
 
-hallucination_score: 0.0 = fully hallucinated, 1.0 = fully grounded in document."""
+hallucination_score: 0.0 = fully hallucinated, 1.0 = fully grounded in document.
+completeness_score: 0.0 = many required parts missing, 1.0 = package is complete and covers objectives.
+json_validity_score: 0.0 = invalid/malformed JSON, 1.0 = fully correct JSON structure.
+educational_quality_score: 0.0 = poor instructional quality, 1.0 = excellent instructional quality.
+consistency_score: 0.0 = contradictory or mismatched content, 1.0 = internally consistent."""
 
 
 class ValidationAgent(BaseAgent):
@@ -124,12 +136,15 @@ class ValidationAgent(BaseAgent):
         schema_valid = bool(data.get("schema_valid", True))
         all_objectives_covered = bool(data.get("all_objectives_covered", True))
         source_chunks_verified = bool(data.get("source_chunks_verified", True))
+        json_validity_score = float(data.get("json_validity_score", 1.0))
+        educational_quality_score = float(data.get("educational_quality_score", 0.8))
+        consistency_score = float(data.get("consistency_score", 0.9))
         completeness_score = data.get("completeness_score")
         if completeness_score is None:
             completeness_score = (
-                (1.0 if all_objectives_covered else 0.0) * 0.55
+                (1.0 if all_objectives_covered else 0.0) * 0.5
                 + (1.0 if source_chunks_verified else 0.0) * 0.35
-                + (1.0 if schema_valid else 0.0) * 0.1
+                + (1.0 if schema_valid else 0.0) * 0.15
             )
 
         issues = [
@@ -144,26 +159,33 @@ class ValidationAgent(BaseAgent):
         error_count = sum(1 for i in issues if i.severity == "error")
         warning_count = sum(1 for i in issues if i.severity == "warning")
 
-        # Overall score: weighted average
+        # Score weights chosen for transparency and production use.
+        # Completeness and grounding are the strongest signals.
         overall_score = (
-            hallucination_score * 0.4
-            + (1.0 if schema_valid else 0.0) * 0.2
-            + (1.0 if all_objectives_covered else 0.0) * 0.2
-            + (1.0 if source_chunks_verified else 0.0) * 0.1
-            + max(0, 1.0 - error_count * 0.2 - warning_count * 0.05) * 0.1
+            completeness_score * 0.35
+            + hallucination_score * 0.3
+            + json_validity_score * 0.15
+            + educational_quality_score * 0.1
+            + consistency_score * 0.1
         )
 
+        # Valid if no blocking errors, schema is valid, and grounding is reasonable.
         is_valid = (
             error_count == 0
-            and hallucination_score >= 0.6
             and schema_valid
+            and hallucination_score >= 0.5
+            and completeness_score >= 0.5
+            and json_validity_score >= 0.75
         )
 
         report = ValidationReport(
             is_valid=is_valid,
-            overall_score=round(overall_score, 3),
-            hallucination_score=round(hallucination_score, 3),
-            completeness_score=round(float(completeness_score), 3),
+            overall_score=round(min(max(overall_score, 0.0), 1.0), 3),
+            hallucination_score=round(min(max(hallucination_score, 0.0), 1.0), 3),
+            completeness_score=round(min(max(float(completeness_score), 0.0), 1.0), 3),
+            json_validity_score=round(min(max(json_validity_score, 0.0), 1.0), 3),
+            educational_quality_score=round(min(max(educational_quality_score, 0.0), 1.0), 3),
+            consistency_score=round(min(max(consistency_score, 0.0), 1.0), 3),
             schema_valid=schema_valid,
             all_objectives_covered=all_objectives_covered,
             source_chunks_verified=source_chunks_verified,
