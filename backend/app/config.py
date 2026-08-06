@@ -6,13 +6,11 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # LLM Configuration
-    llm_provider: Literal["auto", "grok", "gemini", "ollama"] = "grok"
-    grok_api_key: str = ""
-    grok_model: str = "grok-2-latest"
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    llm_provider: Literal["auto", "groq", "ollama"] = "groq"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "minimax-m3:cloud"
+    ollama_model: str = "llama3"
 
     # ChromaDB
     chroma_persist_dir: str = "./data/chroma"

@@ -14,11 +14,10 @@ _overrides: dict = {}
 
 
 class SettingsUpdate(BaseModel):
-    llm_provider: Optional[Literal["auto", "grok", "gemini", "ollama"]] = None
-    grok_model: Optional[str] = None
+    llm_provider: Optional[Literal["auto", "groq", "ollama"]] = None
+    groq_model: Optional[str] = None
     ollama_model: Optional[str] = None
     ollama_base_url: Optional[str] = None
-    gemini_model: Optional[str] = None
     chunk_size: Optional[int] = None
     chunk_overlap: Optional[int] = None
     max_retry_attempts: Optional[int] = None
@@ -32,10 +31,9 @@ async def get_settings_endpoint():
     s = get_settings()
     return {
         "llm_provider": _overrides.get("llm_provider", s.llm_provider),
-        "grok_model": _overrides.get("grok_model", s.grok_model),
+        "groq_model": _overrides.get("groq_model", s.groq_model),
         "ollama_model": _overrides.get("ollama_model", s.ollama_model),
         "ollama_base_url": _overrides.get("ollama_base_url", s.ollama_base_url),
-        "gemini_model": _overrides.get("gemini_model", s.gemini_model),
         "chunk_size": _overrides.get("chunk_size", s.chunk_size),
         "chunk_overlap": _overrides.get("chunk_overlap", s.chunk_overlap),
         "max_retry_attempts": _overrides.get("max_retry_attempts", s.max_retry_attempts),

@@ -5,9 +5,8 @@ pydantic==2.10.3
 pydantic-settings==2.6.1
 
 # LLM
-google-generativeai==0.8.3
+groq==0.11.0
 langchain==0.3.13
-langchain-google-genai==2.0.7
 langchain-community==0.3.13
 langgraph==0.2.60
 langchain-ollama==0.2.2
@@ -37,4 +36,3 @@ aiofiles==24.1.0
 httpx==0.28.1
 pytest==8.3.4
 pytest-asyncio==0.24.0
-httpx==0.28.1
