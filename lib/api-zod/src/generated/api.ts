@@ -37,11 +37,9 @@ export const DetailedHealthCheckResponse = zod.object({
  * Upload a PDF, DOCX, PPT, or TXT document for AI processing
  * @summary Upload educational document
  */
-export const uploadDocumentBodyLanguageDefault = `English`;
-
 export const UploadDocumentBody = zod.object({
   "file": zod.instanceof(File),
-  "language": zod.string().nullish().default(uploadDocumentBodyLanguageDefault)
+  "assessment_config": zod.string().nullish().describe('JSON string of AssessmentConfig for assessment generation')
 })
 
 export const UploadDocumentResponse = zod.object({
@@ -410,6 +408,42 @@ export const GetLogsResponseItem = zod.object({
   "extra": zod.record(zod.string(), zod.unknown()).optional()
 })
 export const GetLogsResponse = zod.array(GetLogsResponseItem)
+
+
+/**
+ * @summary Delete all system log entries
+ */
+export const DeleteAllLogsResponse = zod.object({
+  "error": zod.string(),
+  "detail": zod.string().nullish()
+})
+
+
+/**
+ * @summary Download logs as plain text
+ */
+export const downloadLogsQueryLimitDefault = 1000;
+
+export const DownloadLogsQueryParams = zod.object({
+  "limit": zod.coerce.number().default(downloadLogsQueryLimitDefault),
+  "level": zod.union([zod.literal('debug'),zod.literal('info'),zod.literal('warning'),zod.literal('error'),zod.literal('critical'),zod.literal(null)]).nullish(),
+  "job_id": zod.coerce.string().nullish()
+})
+
+export const DownloadLogsResponse = zod.string()
+
+
+/**
+ * @summary Delete a single log entry by index
+ */
+export const DeleteLogParams = zod.object({
+  "index": zod.coerce.number().int()
+})
+
+export const DeleteLogResponse = zod.object({
+  "error": zod.string(),
+  "detail": zod.string().nullish()
+})
 
 
 /**

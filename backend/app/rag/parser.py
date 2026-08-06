@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 from app.utils.logger import get_logger
+from app.utils.text_cleaner import clean_text, assess_ocr_quality
 
 logger = get_logger(__name__)
 
@@ -23,56 +24,148 @@ class ParsedDocument:
         self.word_count = len(self.full_text.split())
 
 
-def _parse_pdf(path: Path) -> ParsedDocument:
-    pages: list[str] = []
-    metadata: dict = {}
+def _extract_with_fitz(path: Path) -> tuple[list[str], dict]:
+    """Extract text using PyMuPDF (fast, layout-aware)."""
+    import fitz  # PyMuPDF
+    doc = fitz.open(str(path))
+    raw_meta = doc.metadata or {}
+    metadata = {
+        "title": raw_meta.get("title", ""),
+        "author": raw_meta.get("author", ""),
+        "subject": raw_meta.get("subject", ""),
+        "creator": raw_meta.get("creator", ""),
+    }
+    pages = [page.get_text("text") for page in doc]
+    doc.close()
+    return pages, metadata
 
+
+def _extract_with_pypdf(path: Path) -> tuple[list[str], dict]:
+    """Extract text using pypdf (pure-Python fallback)."""
+    from pypdf import PdfReader
+    reader = PdfReader(str(path))
+    raw_meta = reader.metadata or {}
+    metadata = {
+        "title": raw_meta.get("/Title", "") or "",
+        "author": raw_meta.get("/Author", "") or "",
+        "subject": raw_meta.get("/Subject", "") or "",
+        "creator": raw_meta.get("/Creator", "") or "",
+    }
+    pages = [page.extract_text() or "" for page in reader.pages]
+    return pages, metadata
+
+
+def _extract_with_ocr(path: Path) -> tuple[list[str], dict]:
+    """Extract text by rendering pages to images + OCR (best for scanned PDFs).
+
+    Requires ``pytesseract`` and a Tesseract binary. Falls back gracefully.
+    """
     try:
-        import fitz  # PyMuPDF
-    except ModuleNotFoundError:
-        # Keep PDF uploads working in environments where PyMuPDF's native
-        # wheel is unavailable. pypdf is pure Python and already bundled.
-        from pypdf import PdfReader
+        import fitz
+        import pytesseract  # type: ignore
+        from PIL import Image  # type: ignore
+    except (ImportError, Exception):
+        logger.warning("ocr_unavailable_falling_back")
+        return _extract_with_fitz(path)
 
-        reader = PdfReader(str(path))
-        raw_meta = reader.metadata or {}
-        metadata = {
-            "title": raw_meta.get("/Title", "") or "",
-            "author": raw_meta.get("/Author", "") or "",
-            "subject": raw_meta.get("/Subject", "") or "",
-            "creator": raw_meta.get("/Creator", "") or "",
-        }
-        pages = [page.extract_text() or "" for page in reader.pages]
-        logger.warning("pymupdf_unavailable_using_pypdf", filename=path.name)
-    else:
-        doc = fitz.open(str(path))
-        raw_meta = doc.metadata or {}
-        metadata = {
-            "title": raw_meta.get("title", ""),
-            "author": raw_meta.get("author", ""),
-            "subject": raw_meta.get("subject", ""),
-            "creator": raw_meta.get("creator", ""),
-        }
-        pages = [page.get_text("text") for page in doc]
-        doc.close()
+    doc = fitz.open(str(path))
+    pages: list[str] = []
+    for page in doc:
+        pix = page.get_pixmap(dpi=220)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        try:
+            text = pytesseract.image_to_string(img)
+        except Exception:
+            text = ""
+        pages.append(text)
+    doc.close()
+    return pages, {}
 
-    full_text_parts = pages
-    full_text = "\n\n".join(full_text_parts)
-    return ParsedDocument(
-        filename=path.name,
-        file_type="pdf",
-        full_text=full_text,
-        pages=pages,
-        metadata=metadata,
-        page_count=len(pages),
-    )
+
+def _parse_pdf(path: Path) -> ParsedDocument:
+    """Parse a PDF, retrying with a better strategy if quality is poor."""
+    strategies = [
+        ("fitz", _extract_with_fitz),
+        ("pypdf", _extract_with_pypdf),
+        ("ocr", _extract_with_ocr),
+    ]
+
+    best: Optional[ParsedDocument] = None
+    best_score = -1.0
+
+    for label, extractor in strategies:
+        try:
+            pages, metadata = extractor(path)
+        except Exception as e:
+            logger.warning(
+                "pdf_extract_strategy_failed",
+                strategy=label,
+                error=str(e),
+                filename=path.name,
+            )
+            continue
+
+        full_text_raw = "\n\n".join(pages)
+        full_text = clean_text(full_text_raw)
+        quality = assess_ocr_quality(full_text)
+
+        parsed = ParsedDocument(
+            filename=path.name,
+            file_type="pdf",
+            full_text=full_text,
+            pages=pages,
+            metadata=metadata,
+            page_count=len(pages),
+        )
+
+        logger.info(
+            "pdf_extract_strategy",
+            strategy=label,
+            filename=path.name,
+            score=quality["score"],
+            chars=len(full_text),
+        )
+
+        if quality["score"] > best_score:
+            best_score = quality["score"]
+            best = parsed
+
+        # A high-quality extraction is good enough; stop early.
+        if quality["score"] >= 0.6:
+            break
+
+    if best is None:
+        # Final fallback: attempt pypdf directly, else empty doc.
+        try:
+            pages, metadata = _extract_with_pypdf(path)
+            full_text = clean_text("\n\n".join(pages))
+            best = ParsedDocument(
+                filename=path.name,
+                file_type="pdf",
+                full_text=full_text,
+                pages=pages,
+                metadata=metadata,
+                page_count=len(pages),
+            )
+        except Exception as e:
+            logger.error("pdf_extract_all_failed", error=str(e), filename=path.name)
+            best = ParsedDocument(
+                filename=path.name,
+                file_type="pdf",
+                full_text="",
+                pages=[],
+                metadata={},
+                page_count=0,
+            )
+
+    return best
 
 
 def _parse_docx(path: Path) -> ParsedDocument:
     from docx import Document  # type: ignore
     doc = Document(str(path))
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-    full_text = "\n\n".join(paragraphs)
+    full_text = clean_text("\n\n".join(paragraphs))
     return ParsedDocument(
         filename=path.name,
         file_type="docx",
@@ -93,7 +186,7 @@ def _parse_pptx(path: Path) -> ParsedDocument:
             if hasattr(shape, "text") and shape.text.strip():
                 texts.append(shape.text)
         slides.append("\n".join(texts))
-    full_text = "\n\n".join(slides)
+    full_text = clean_text("\n\n".join(slides))
     return ParsedDocument(
         filename=path.name,
         file_type="pptx",
@@ -106,11 +199,12 @@ def _parse_pptx(path: Path) -> ParsedDocument:
 
 def _parse_txt(path: Path) -> ParsedDocument:
     text = path.read_text(encoding="utf-8", errors="replace")
+    full_text = clean_text(text)
     return ParsedDocument(
         filename=path.name,
         file_type="txt",
-        full_text=text,
-        pages=[text],
+        full_text=full_text,
+        pages=[full_text],
         metadata={},
         page_count=1,
     )

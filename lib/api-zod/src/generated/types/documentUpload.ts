@@ -8,6 +8,9 @@
 
 export interface DocumentUpload {
   file: Blob;
-  /** @nullable */
-  language?: string | null;
+  /**
+     * JSON string of AssessmentConfig for assessment generation
+     * @nullable
+     */
+  assessment_config?: string | null;
 }

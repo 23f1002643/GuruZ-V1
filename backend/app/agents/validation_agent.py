@@ -1,5 +1,6 @@
 """Agent 9: Validation — check for hallucination, schema validity, coverage."""
 from __future__ import annotations
+from typing import Callable, Optional
 from app.agents.base_agent import BaseAgent
 from app.rag.retriever import retrieve_all
 from app.schemas.teacher_package import TeacherKnowledgePackage, ValidationReport, ValidationIssue
@@ -8,17 +9,21 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 SYSTEM = """You are a rigorous academic quality assurance specialist.
-Evaluate whether the generated educational package accurately reflects the source document.
+Evaluate whether the generated educational package accurately reflects the source material.
+Write naturally, without referencing how the content was obtained.
+Write ALL content in the language specified in LANGUAGE field. Do NOT mix languages.
+Do NOT use phrases like 'according to the document', 'based on the provided material', 'the text says', 'source text', 'retrieved content', etc. Write as if the knowledge is yours.
 Respond ONLY with valid JSON."""
 
-PROMPT_TEMPLATE = """Validate this Teacher Knowledge Package against the original document.
+PROMPT_TEMPLATE = """Validate this Teacher Knowledge Package against the source material.
 
-DOCUMENT EXCERPTS (ground truth):
+REFERENCE MATERIAL (ground truth):
 {context}
 
 PACKAGE SUMMARY:
 - Subject: {subject}
 - Topic: {topic}
+- Language: {language}
 - Learning Objectives: {objectives_count}
 - Concepts: {concepts_count}  
 - Definitions: {definitions_count}
@@ -62,13 +67,20 @@ class ValidationAgent(BaseAgent):
     max_tokens = 2000
 
     async def run(
-        self, package: TeacherKnowledgePackage, job_id: str
+        self, package: TeacherKnowledgePackage, language: str, job_id: str,
+        progress_cb: Optional[Callable[[int, str], None]] = None,
     ) -> ValidationReport:
         logger.info("agent_start", agent=self.name, job_id=job_id)
+
+        if progress_cb:
+            progress_cb(20, "Retrieving ground truth from document...")
 
         # Get ground truth from document
         doc_chunks = retrieve_all(job_id, max_chunks=20)
         context = self.build_rag_context(doc_chunks)
+
+        if progress_cb:
+            progress_cb(40, "Building package sample...")
 
         # Build a sample of generated content to validate
         sample_parts = []
@@ -85,10 +97,14 @@ class ValidationAgent(BaseAgent):
             sample_parts.append(f"LESSON INTRO: {l.teacher_script[:300]}")
         sample = "\n\n".join(sample_parts)
 
+        if progress_cb:
+            progress_cb(60, "Validating package against source...")
+
         prompt = PROMPT_TEMPLATE.format(
             context=context,
             subject=package.metadata.subject,
             topic=package.metadata.topic,
+            language=language,
             objectives_count=len(package.learning_objectives),
             concepts_count=len(package.concepts),
             definitions_count=len(package.definitions),
@@ -100,6 +116,9 @@ class ValidationAgent(BaseAgent):
         )
 
         data = await self.call_llm_json(prompt, SYSTEM)
+
+        if progress_cb:
+            progress_cb(80, "Scoring validation results...")
 
         hallucination_score = float(data.get("hallucination_score", 0.8))
         schema_valid = bool(data.get("schema_valid", True))
@@ -143,6 +162,9 @@ class ValidationAgent(BaseAgent):
             issues=issues,
             regeneration_count=0,
         )
+
+        if progress_cb:
+            progress_cb(100, f"Score: {report.overall_score:.2f}, Valid: {report.is_valid}")
 
         logger.info(
             "agent_complete", agent=self.name, job_id=job_id,

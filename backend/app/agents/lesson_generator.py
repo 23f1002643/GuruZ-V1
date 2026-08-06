@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable, Optional
 
 from app.agents.base_agent import BaseAgent
 from app.rag.retriever import retrieve
@@ -12,8 +12,11 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 SYSTEM = """You are a master teacher creating detailed, engaging lesson plans.
-Use ONLY content from the provided document excerpts.
+Use ONLY content from the provided subject-matter material.
 Never invent examples or explanations not present in the source.
+Write naturally, as a professional teacher would.
+Write ALL content in the language specified in LANGUAGE field. Do NOT mix languages.
+Do NOT reference the source document, context, or say phrases like 'according to the document', 'based on the provided material', 'the text says', etc. Write as if the knowledge is yours.
 Respond ONLY with valid JSON."""
 
 PERIOD_PROMPT = """Create a detailed lesson plan for Period {period_number}: "{period_title}".
@@ -21,11 +24,12 @@ PERIOD_PROMPT = """Create a detailed lesson plan for Period {period_number}: "{p
 SUBJECT: {subject}
 TOPIC: {topic}
 GRADE: {grade}
+LANGUAGE: {language}
 
 PERIOD OBJECTIVES:
 {objectives}
 
-RELEVANT DOCUMENT CONTENT:
+RELEVANT MATERIAL:
 {context}
 
 Return ONLY valid JSON in this exact format:
@@ -70,7 +74,7 @@ Return ONLY valid JSON in this exact format:
 class LessonGeneratorAgent(BaseAgent):
     name = "lesson_generator"
     temperature = 0.3
-    max_tokens = 5000
+    max_tokens = 7000
 
     def _ensure_string(self, value: Any) -> str:
         """Convert any value into a readable string."""
@@ -119,7 +123,9 @@ class LessonGeneratorAgent(BaseAgent):
         self,
         metadata: DocumentMetadata,
         teaching_plan: TeachingPlan,
+        language: str,
         job_id: str,
+        progress_cb: Optional[Callable[[int, str], None]] = None,
     ) -> list[Lesson]:
 
         logger.info(
@@ -129,9 +135,14 @@ class LessonGeneratorAgent(BaseAgent):
             total_periods=teaching_plan.total_periods,
         )
 
+        total = len(teaching_plan.period_plan)
         lessons = []
 
-        for period in teaching_plan.period_plan:
+        for idx, period in enumerate(teaching_plan.period_plan):
+
+            if progress_cb:
+                pct = int(((idx) / max(total, 1)) * 90) + 10
+                progress_cb(pct, f"Generating lesson {idx + 1}/{total}: {period.title}")
 
             query = " ".join(period.topics + [period.title, metadata.topic])
 
@@ -149,6 +160,7 @@ class LessonGeneratorAgent(BaseAgent):
                 subject=metadata.subject,
                 topic=metadata.topic,
                 grade=metadata.grade,
+                language=language,
                 duration=teaching_plan.period_duration_minutes,
                 objectives=objectives_str,
                 context=context,

@@ -49,6 +49,7 @@ class Job(BaseModel):
     filename: str
     file_size: Optional[int] = None
     file_type: Optional[str] = None
+    language: Optional[str] = None
     created_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -84,17 +85,18 @@ class Job(BaseModel):
                 if progress >= 100:
                     s.completed_at = now
                 break
-        # Calculate overall progress
-        completed = sum(1 for s in self.stages if s.progress >= 100)
-        current_stage_progress = next(
-            (s.progress for s in self.stages if s.stage == stage_name), 0
-        )
+        # Calculate overall progress as an equal-weighted average across all stages.
         total = len(self.stages)
-        if total > 0:
-            self.overall_progress = int(
-                ((completed / total) * 100 * 0.9) +
-                (current_stage_progress / total * 0.1)
+        if total > 0 and stage_name in [s.stage for s in self.stages]:
+            idx = next(
+                i for i, s in enumerate(self.stages) if s.stage == stage_name
             )
+            # Stages before the current one are fully done (100).
+            # The current stage contributes its own progress.
+            # Stages after are still 0.
+            before_sum = idx * 100
+            overall = (before_sum + progress) / total
+            self.overall_progress = max(self.overall_progress, int(overall))
         self.touch()
 
 

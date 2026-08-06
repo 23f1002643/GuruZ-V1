@@ -18,6 +18,8 @@ export * from './documentMetadata';
 export * from './documentMetadataCategory';
 export * from './documentMetadataDifficulty';
 export * from './documentUpload';
+export * from './downloadLogsLevel';
+export * from './downloadLogsParams';
 export * from './errorResponse';
 export * from './example';
 export * from './formula';

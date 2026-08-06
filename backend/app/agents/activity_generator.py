@@ -1,5 +1,6 @@
 """Agent 6: Activity Generator — design diverse classroom activities."""
 from __future__ import annotations
+from typing import Callable, Optional
 from app.agents.base_agent import BaseAgent
 from app.rag.retriever import retrieve
 from app.schemas.teacher_package import DocumentMetadata, Activity, TeachingPlan
@@ -8,21 +9,25 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 SYSTEM = """You are an innovative educator specializing in active learning strategies.
-Design engaging, practical activities based only on the document content.
+Design engaging, practical activities based only on the provided subject-matter content.
+Write naturally, as a professional teacher would.
+Write ALL content in the language specified in LANGUAGE field. Do NOT mix languages.
+Do NOT reference the source document, context, or say phrases like 'according to the document', 'based on the provided material', 'the text says', etc. Write as if the knowledge is yours.
 Respond ONLY with valid JSON."""
 
 PROMPT_TEMPLATE = """Design diverse classroom activities for teaching: {subject} — {topic}
 
 GRADE LEVEL: {grade}
 CATEGORY: {category}
+LANGUAGE: {language}
 LEARNING OBJECTIVES:
 {objectives}
 
-DOCUMENT CONTENT:
+SOURCE MATERIAL:
 {context}
 
 Create 4-6 varied activities using different pedagogical approaches.
-Use ONLY content from the document for the subject matter.
+Use ONLY content from the provided material for the subject matter.
 
 Return a JSON array of activity objects:
 [
@@ -46,9 +51,13 @@ class ActivityGeneratorAgent(BaseAgent):
 
     async def run(
         self, metadata: DocumentMetadata, knowledge: dict,
-        teaching_plan: TeachingPlan, job_id: str
+        teaching_plan: TeachingPlan, language: str, job_id: str,
+        progress_cb: Optional[Callable[[int, str], None]] = None,
     ) -> list[Activity]:
         logger.info("agent_start", agent=self.name, job_id=job_id)
+
+        if progress_cb:
+            progress_cb(20, "Retrieving activity context...")
 
         chunks = retrieve(job_id, f"practical application activities {metadata.topic}", top_k=8)
         context = self.build_rag_context(chunks)
@@ -56,11 +65,15 @@ class ActivityGeneratorAgent(BaseAgent):
             f"- {o}" for o in knowledge.get("learning_objectives", [])
         )
 
+        if progress_cb:
+            progress_cb(50, "Designing classroom activities...")
+
         prompt = PROMPT_TEMPLATE.format(
             subject=metadata.subject,
             topic=metadata.topic,
             grade=metadata.grade,
             category=metadata.category,
+            language=language,
             objectives=objectives_str or "Not specified",
             context=context,
         )
@@ -68,6 +81,9 @@ class ActivityGeneratorAgent(BaseAgent):
         data = await self.call_llm_json(prompt, SYSTEM)
         if not isinstance(data, list):
             data = data.get("activities", [])
+
+        if progress_cb:
+            progress_cb(80, "Structuring activity details...")
 
         activities = []
         for item in data:
@@ -84,6 +100,9 @@ class ActivityGeneratorAgent(BaseAgent):
                 ))
             except Exception as e:
                 logger.warning("activity_parse_error", error=str(e))
+
+        if progress_cb:
+            progress_cb(100, f"{len(activities)} activities designed")
 
         logger.info("agent_complete", agent=self.name, job_id=job_id,
                     activities=len(activities))

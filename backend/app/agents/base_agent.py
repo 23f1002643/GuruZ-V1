@@ -85,8 +85,14 @@ def _close_json_candidate(candidate: str) -> str:
                 stack.clear()
                 break
 
+    # If the output was truncated inside a string, drop the incomplete trailing value.
     if in_string:
-        candidate += '"'
+        cut = candidate.rfind('"')
+        second = candidate.rfind('"', 0, cut)
+        if cut != -1 and second != -1:
+            candidate = candidate[:second]
+        elif cut != -1:
+            candidate = candidate[:cut]
 
     while stack:
         opener = stack.pop()
@@ -210,8 +216,15 @@ class BaseAgent:
         )
 
     async def call_llm_json(self, prompt: str, system: str = "") -> Any:
-        """Call LLM and parse the response as JSON."""
+        """Call LLM and parse the response as JSON, with a self-healing retry."""
         raw = await self.call_llm(prompt, system)
+
+        if not raw or not raw.strip():
+            raise ValueError(
+                f"LLM returned empty output for agent {self.name}. "
+                "Provider may be unavailable or generated no content."
+            )
+
         try:
             return extract_json(raw)
         except ValueError as exc:
@@ -221,11 +234,42 @@ class BaseAgent:
                 error=str(exc),
                 raw_output=raw[:2000],
             )
-            raise
+
+            # Self-healing retry: ask the LLM to re-emit ONLY valid JSON.
+            repair_system = (
+                "You previously returned malformed or truncated JSON. "
+                "Re-respond with the SAME content but STRICTLY as one valid JSON object "
+                "with NO markdown fences, NO commentary, and NO trailing text."
+            )
+            repair_prompt = (
+                "{prompt}\n\n"
+                "Your previous output was truncated or invalid JSON. "
+                "Re-emit the complete result as ONE valid JSON object only. "
+                "Do not include ```json fences or any prose."
+            ).format(prompt=prompt)
+
+            logger.info("json_repair_retry", agent=self.name)
+            raw2 = await self.call_llm(repair_prompt, repair_system)
+
+            if not raw2 or not raw2.strip():
+                raise ValueError(
+                    f"LLM returned empty output during JSON repair for agent {self.name}."
+                )
+
+            try:
+                return extract_json(raw2)
+            except ValueError as exc2:
+                logger.warning(
+                    "json_repair_failed",
+                    agent=self.name,
+                    error=str(exc2),
+                    raw_output=raw2[:2000],
+                )
+                raise
 
     def build_rag_context(self, chunks: list[str]) -> str:
         """Format retrieved chunks as a context block for prompts."""
         if not chunks:
-            return "No relevant content found in the document."
-        context_parts = [f"[Chunk {i + 1}]\n{chunk}" for i, chunk in enumerate(chunks)]
+            return "No relevant content available."
+        context_parts = [f"[Passage {i + 1}]\n{chunk}" for i, chunk in enumerate(chunks)]
         return "\n\n---\n\n".join(context_parts)

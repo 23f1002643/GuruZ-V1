@@ -42,6 +42,33 @@ def get_logs(limit: int = 100, level: Optional[str] = None,
     return entries[-limit:]
 
 
+def delete_log(idx: int) -> bool:
+    """Delete a single log entry by index. Returns True if deleted."""
+    with _log_lock:
+        if 0 <= idx < len(_log_buffer):
+            _log_buffer.pop(idx)
+            return True
+    return False
+
+
+def clear_logs() -> int:
+    """Delete all log entries. Returns the number removed."""
+    with _log_lock:
+        count = len(_log_buffer)
+        _log_buffer.clear()
+    return count
+
+
+def clear_logs_for_job(job_id: str) -> int:
+    """Delete all log entries for a specific job. Returns the number removed."""
+    removed = 0
+    with _log_lock:
+        before = len(_log_buffer)
+        _log_buffer[:] = [e for e in _log_buffer if e.get("job_id") != job_id]
+        removed = before - len(_log_buffer)
+    return removed
+
+
 class BufferingHandler(logging.Handler):
     """Custom logging handler that writes to the in-memory buffer."""
 

@@ -22,6 +22,7 @@ import type {
 import type {
   DetailedHealth,
   DocumentUpload,
+  DownloadLogsParams,
   ErrorResponse,
   GetLogsParams,
   HealthStatus,
@@ -235,8 +236,8 @@ export const getUploadDocumentUrl = () => {
 export const uploadDocument = async (documentUpload: DocumentUpload, options?: Parameters<typeof customFetch>[1]): Promise<JobCreated> => {
     const formData = new FormData();
 formData.append(`file`, documentUpload.file);
-if(documentUpload.language !== undefined && documentUpload.language !== null) {
- formData.append(`language`, documentUpload.language);
+if(documentUpload.assessment_config !== undefined && documentUpload.assessment_config !== null) {
+ formData.append(`assessment_config`, documentUpload.assessment_config);
  }
 
   return customFetch<JobCreated>(getUploadDocumentUrl(),
@@ -1002,6 +1003,232 @@ export function useGetLogs<TData = Awaited<ReturnType<typeof getLogs>>, TError =
 
 
 
+
+export const getDeleteAllLogsUrl = () => {
+
+
+
+
+  return `/api/logs`
+}
+
+/**
+ * @summary Delete all system log entries
+ */
+export const deleteAllLogs = async ( options?: Parameters<typeof customFetch>[1]): Promise<ErrorResponse> => {
+
+  return customFetch<ErrorResponse>(getDeleteAllLogsUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteAllLogsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAllLogs>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAllLogs>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteAllLogs'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAllLogs>>, void> = () => {
+
+
+          return  deleteAllLogs(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAllLogsMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAllLogs>>>
+
+    export type DeleteAllLogsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete all system log entries
+ */
+export const useDeleteAllLogs = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAllLogs>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAllLogs>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteAllLogsMutationOptions(options));
+    }
+
+export const getDownloadLogsUrl = (params?: DownloadLogsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/logs/download?${stringifiedParams}` : `/api/logs/download`
+}
+
+/**
+ * @summary Download logs as plain text
+ */
+export const downloadLogs = async (params?: DownloadLogsParams, options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getDownloadLogsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadLogsQueryKey = (params?: DownloadLogsParams,) => {
+    return [
+    `/api/logs/download`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getDownloadLogsQueryOptions = <TData = Awaited<ReturnType<typeof downloadLogs>>, TError = ErrorType<unknown>>(params?: DownloadLogsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadLogsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadLogs>>> = ({ signal }) => downloadLogs(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadLogs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadLogsQueryResult = NonNullable<Awaited<ReturnType<typeof downloadLogs>>>
+export type DownloadLogsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Download logs as plain text
+ */
+
+export function useDownloadLogs<TData = Awaited<ReturnType<typeof downloadLogs>>, TError = ErrorType<unknown>>(
+ params?: DownloadLogsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadLogsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDeleteLogUrl = (index: number,) => {
+
+
+
+
+  return `/api/logs/${index}`
+}
+
+/**
+ * @summary Delete a single log entry by index
+ */
+export const deleteLog = async (index: number, options?: Parameters<typeof customFetch>[1]): Promise<ErrorResponse> => {
+
+  return customFetch<ErrorResponse>(getDeleteLogUrl(index),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteLogMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLog>>, TError,{index: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLog>>, TError,{index: number}, TContext> => {
+
+const mutationKey = ['deleteLog'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLog>>, {index: number}> = (props) => {
+          const {index} = props ?? {};
+
+          return  deleteLog(index,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteLogMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLog>>>
+
+    export type DeleteLogMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a single log entry by index
+ */
+export const useDeleteLog = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLog>>, TError,{index: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteLog>>,
+        TError,
+        {index: number},
+        TContext
+      > => {
+      return useMutation(getDeleteLogMutationOptions(options));
+    }
 
 export const getGetSettingsUrl = () => {
 

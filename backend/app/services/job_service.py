@@ -85,6 +85,16 @@ def set_job_package(job_id: str, package_id: str) -> None:
         job.touch()
 
 
+def update_job_language(job_id: str, language: str) -> None:
+    job = _jobs.get(job_id)
+    if job:
+        job.language = language
+        job.touch()
+        log_to_buffer("info", f"Job {job_id} language set to {language}", job_id=job_id)
+
+
+
+
 def cancel_job(job_id: str) -> Optional[Job]:
     job = _jobs.get(job_id)
     if not job:

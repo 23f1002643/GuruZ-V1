@@ -1,5 +1,6 @@
 """Agent 3: Knowledge Extractor — extract concepts, definitions, formulae, examples, applications."""
 from __future__ import annotations
+from typing import Callable, Optional
 from app.agents.base_agent import BaseAgent
 from app.rag.retriever import retrieve, retrieve_all
 from app.schemas.teacher_package import (
@@ -10,18 +11,21 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 SYSTEM = """You are an expert educational knowledge engineer.
-Extract structured knowledge from the retrieved document excerpts.
-ONLY extract information that is explicitly present in the provided document excerpts.
+Extract structured knowledge from the provided subject-matter content.
+ONLY extract information that is explicitly present in the provided content.
 Never add information from your own prior knowledge.
-If something is not found, omit it or note 'Not found in uploaded document'.
+If something is not found, omit it or note 'Not found in the provided material'.
+Write ALL content in the language specified in LANGUAGE field. Do NOT mix languages.
+Do NOT reference the source document, context, or say phrases like 'according to the document', 'based on the provided material', 'the text says', etc. Write as if the knowledge is yours.
 Respond ONLY with valid JSON."""
 
-PROMPT_TEMPLATE = """Extract all educational knowledge from this document.
+PROMPT_TEMPLATE = """Extract all educational knowledge from the given material.
 
 SUBJECT: {subject}
 TOPIC: {topic}
+LANGUAGE: {language}
 
-DOCUMENT EXCERPTS:
+SOURCE MATERIAL:
 {context}
 
 Return a JSON object with exactly these fields:
@@ -33,16 +37,14 @@ Return a JSON object with exactly these fields:
   "concepts": [
     {{
       "name": "concept name",
-      "explanation": "full explanation from the document",
-      "importance": "core | supporting | supplementary",
-      "source_chunks": ["chunk_id or excerpt reference"]
+      "explanation": "full explanation",
+      "importance": "core | supporting | supplementary"
     }}
   ],
   "definitions": [
     {{
       "term": "technical term",
-      "definition": "exact definition from document",
-      "source_chunks": ["reference"]
+      "definition": "exact definition"
     }}
   ],
   "formulae": [
@@ -50,27 +52,24 @@ Return a JSON object with exactly these fields:
       "name": "formula name",
       "expression": "mathematical or symbolic expression",
       "description": "what it represents",
-      "variables": ["variable and its meaning"],
-      "source_chunks": ["reference"]
+      "variables": ["variable and its meaning"]
     }}
   ],
   "examples": [
     {{
       "title": "example title",
-      "description": "full example from document",
-      "source_chunks": ["reference"]
+      "description": "full example"
     }}
   ],
   "applications": [
     {{
       "domain": "application domain",
-      "description": "how the concept is applied",
-      "source_chunks": ["reference"]
+      "description": "how the concept is applied"
     }}
   ]
 }}
 
-Important: Extract ONLY from the provided excerpts. If formulae or examples are not in the document, return empty arrays."""
+Important: Extract ONLY from the provided material. If formulae or examples are not present, return empty arrays."""
 
 
 class KnowledgeExtractorAgent(BaseAgent):
@@ -79,9 +78,13 @@ class KnowledgeExtractorAgent(BaseAgent):
     max_tokens = 6000
 
     async def run(
-        self, metadata: DocumentMetadata, job_id: str
+        self, metadata: DocumentMetadata, language: str, job_id: str,
+        progress_cb: Optional[Callable[[int, str], None]] = None,
     ) -> dict:
         logger.info("agent_start", agent=self.name, job_id=job_id)
+
+        if progress_cb:
+            progress_cb(15, "Retrieving comprehensive document chunks...")
 
         # Retrieve comprehensive chunks for knowledge extraction
         query = f"{metadata.subject} {metadata.topic} concepts definitions formulae examples applications"
@@ -90,13 +93,21 @@ class KnowledgeExtractorAgent(BaseAgent):
             chunks = retrieve(job_id, query, top_k=15)
 
         context = self.build_rag_context(chunks)
+
+        if progress_cb:
+            progress_cb(40, "Extracting concepts and definitions...")
+
         prompt = PROMPT_TEMPLATE.format(
             subject=metadata.subject,
             topic=metadata.topic,
+            language=language,
             context=context,
         )
 
         data = await self.call_llm_json(prompt, SYSTEM)
+
+        if progress_cb:
+            progress_cb(75, "Structuring knowledge fields...")
 
         result = {
             "learning_objectives": data.get("learning_objectives", []),
@@ -107,6 +118,9 @@ class KnowledgeExtractorAgent(BaseAgent):
             "examples": [Example(**e) for e in data.get("examples", [])],
             "applications": [Application(**a) for a in data.get("applications", [])],
         }
+
+        if progress_cb:
+            progress_cb(100, f"{len(result['concepts'])} concepts, {len(result['definitions'])} definitions")
 
         logger.info(
             "agent_complete", agent=self.name, job_id=job_id,

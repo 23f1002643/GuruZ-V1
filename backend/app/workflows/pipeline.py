@@ -17,7 +17,7 @@ from app.agents.assessment_generator import AssessmentGeneratorAgent
 from app.agents.misconception_detector import MisconceptionDetectorAgent
 from app.agents.validation_agent import ValidationAgent
 from app.agents.publisher import PublisherAgent
-from app.schemas.teacher_package import TeacherKnowledgePackage
+from app.schemas.teacher_package import TeacherKnowledgePackage, AssessmentConfig
 from app.schemas.job import STAGES
 from app.services import job_service
 from app.utils.logger import get_logger, log_to_buffer
@@ -30,6 +30,7 @@ MAX_VALIDATION_RETRIES = 2
 class PipelineState(TypedDict, total=False):
     job_id: str
     file_path: str
+    language: str
     parsed_doc: Any
     chunks: list
     metadata: Any
@@ -42,6 +43,7 @@ class PipelineState(TypedDict, total=False):
     validation_report: Any
     package: Any
     error: str
+    assessment_config: Any
 
 
 def _stage_progress(job_id: str, stage: str, pct: int, msg: str = "") -> None:
@@ -51,15 +53,32 @@ def _stage_progress(job_id: str, stage: str, pct: int, msg: str = "") -> None:
 
 async def node_document_parsing(state: PipelineState) -> PipelineState:
     job_id = state["job_id"]
-    _stage_progress(job_id, "document_parsing", 10, "Parsing document...")
+    _stage_progress(job_id, "document_parsing", 5, "Parsing document...")
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "document_parsing", pct, msg)
+
     try:
         agent = DocumentParserAgent()
-        parsed_doc, chunks = await agent.run(Path(state["file_path"]), job_id)
-        _stage_progress(job_id, "document_parsing", 100,
-                        f"Parsed {parsed_doc.page_count} pages, {len(chunks)} chunks")
-        return {**state, "parsed_doc": parsed_doc, "chunks": chunks}
+        parsed_doc, chunks, language = await agent.run(
+            Path(state["file_path"]), job_id, progress_cb=_cb
+        )
+
+        job_service.update_job_language(job_id, language)
+        _stage_progress(
+            job_id,
+            "document_parsing",
+            100,
+            f"Parsed {parsed_doc.page_count} pages, {len(chunks)} chunks. Detected language: {language}",
+        )
+        return {
+            **state,
+            "parsed_doc": parsed_doc,
+            "chunks": chunks,
+            "language": language,
+        }
     except Exception as e:
-        logger.error("node_error", node="document_parsing", error=str(e))
+        logger.error("node_error", node="document_parsing", error=str(e), exc_info=True)
         return {**state, "error": f"Document parsing failed: {e}"}
 
 
@@ -67,10 +86,14 @@ async def node_educational_classification(state: PipelineState) -> PipelineState
     if state.get("error"):
         return state
     job_id = state["job_id"]
-    _stage_progress(job_id, "educational_classification", 10, "Classifying document...")
+    _stage_progress(job_id, "educational_classification", 5, "Classifying document...")
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "educational_classification", pct, msg)
+
     try:
         agent = EducationalClassifierAgent()
-        metadata = await agent.run(state["parsed_doc"], job_id)
+        metadata = await agent.run(state["parsed_doc"], state["language"], job_id, progress_cb=_cb)
         _stage_progress(job_id, "educational_classification", 100,
                         f"Subject: {metadata.subject}, Grade: {metadata.grade}")
         return {**state, "metadata": metadata}
@@ -83,10 +106,14 @@ async def node_knowledge_extraction(state: PipelineState) -> PipelineState:
     if state.get("error"):
         return state
     job_id = state["job_id"]
-    _stage_progress(job_id, "knowledge_extraction", 10, "Extracting knowledge...")
+    _stage_progress(job_id, "knowledge_extraction", 5, "Extracting knowledge...")
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "knowledge_extraction", pct, msg)
+
     try:
         agent = KnowledgeExtractorAgent()
-        knowledge = await agent.run(state["metadata"], job_id)
+        knowledge = await agent.run(state["metadata"], state["language"], job_id, progress_cb=_cb)
         _stage_progress(job_id, "knowledge_extraction", 100,
                         f"{len(knowledge['concepts'])} concepts, "
                         f"{len(knowledge['learning_objectives'])} objectives")
@@ -100,10 +127,14 @@ async def node_teaching_planning(state: PipelineState) -> PipelineState:
     if state.get("error"):
         return state
     job_id = state["job_id"]
-    _stage_progress(job_id, "teaching_planning", 10, "Designing teaching plan...")
+    _stage_progress(job_id, "teaching_planning", 5, "Designing teaching plan...")
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "teaching_planning", pct, msg)
+
     try:
         agent = TeachingPlannerAgent()
-        teaching_plan = await agent.run(state["metadata"], state["knowledge"], job_id)
+        teaching_plan = await agent.run(state["metadata"], state["knowledge"], state["language"], job_id, progress_cb=_cb)
         _stage_progress(job_id, "teaching_planning", 100,
                         f"{teaching_plan.total_periods} periods planned")
         return {**state, "teaching_plan": teaching_plan}
@@ -117,11 +148,17 @@ async def node_lesson_generation(state: PipelineState) -> PipelineState:
         return state
     job_id = state["job_id"]
     plan = state["teaching_plan"]
-    _stage_progress(job_id, "lesson_generation", 10,
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "lesson_generation", pct, msg)
+
+    _stage_progress(job_id, "lesson_generation", 5,
                     f"Generating {plan.total_periods} lessons...")
     try:
         agent = LessonGeneratorAgent()
-        lessons = await agent.run(state["metadata"], plan, job_id)
+        lessons = await agent.run(
+            state["metadata"], plan, state["language"], job_id, progress_cb=_cb
+        )
         _stage_progress(job_id, "lesson_generation", 100,
                         f"{len(lessons)} lessons generated")
         return {**state, "lessons": lessons}
@@ -134,11 +171,16 @@ async def node_activity_generation(state: PipelineState) -> PipelineState:
     if state.get("error"):
         return state
     job_id = state["job_id"]
-    _stage_progress(job_id, "activity_generation", 10, "Generating activities...")
+    _stage_progress(job_id, "activity_generation", 5, "Generating activities...")
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "activity_generation", pct, msg)
+
     try:
         agent = ActivityGeneratorAgent()
         activities = await agent.run(
-            state["metadata"], state["knowledge"], state["teaching_plan"], job_id
+            state["metadata"], state["knowledge"], state["teaching_plan"], state["language"], job_id,
+            progress_cb=_cb,
         )
         _stage_progress(job_id, "activity_generation", 100,
                         f"{len(activities)} activities designed")
@@ -152,10 +194,19 @@ async def node_assessment_generation(state: PipelineState) -> PipelineState:
     if state.get("error"):
         return state
     job_id = state["job_id"]
-    _stage_progress(job_id, "assessment_generation", 10, "Creating assessments...")
+    _stage_progress(job_id, "assessment_generation", 5, "Creating assessments...")
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "assessment_generation", pct, msg)
+
     try:
         agent = AssessmentGeneratorAgent()
-        assessments = await agent.run(state["metadata"], state["knowledge"], job_id)
+        config = state.get("assessment_config")
+        assessments = await agent.run(
+            state["metadata"], state["knowledge"], state["language"], job_id, config,
+            progress_cb=_cb,
+        )
+        assessments.config = config
         _stage_progress(job_id, "assessment_generation", 100,
                         f"{assessments.total_questions} questions created")
         return {**state, "assessments": assessments}
@@ -168,10 +219,14 @@ async def node_misconception_detection(state: PipelineState) -> PipelineState:
     if state.get("error"):
         return state
     job_id = state["job_id"]
-    _stage_progress(job_id, "misconception_detection", 10, "Detecting misconceptions...")
+    _stage_progress(job_id, "misconception_detection", 5, "Detecting misconceptions...")
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "misconception_detection", pct, msg)
+
     try:
         agent = MisconceptionDetectorAgent()
-        misconceptions = await agent.run(state["metadata"], state["knowledge"], job_id)
+        misconceptions = await agent.run(state["metadata"], state["knowledge"], state["language"], job_id, progress_cb=_cb)
         _stage_progress(job_id, "misconception_detection", 100,
                         f"{len(misconceptions)} misconceptions identified")
         return {**state, "misconceptions": misconceptions}
@@ -184,7 +239,11 @@ async def node_validation(state: PipelineState) -> PipelineState:
     if state.get("error"):
         return state
     job_id = state["job_id"]
-    _stage_progress(job_id, "validation", 10, "Validating package...")
+    _stage_progress(job_id, "validation", 5, "Validating package...")
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "validation", pct, msg)
+
     try:
         # Assemble preliminary package for validation
         knowledge = state.get("knowledge", {})
@@ -207,7 +266,7 @@ async def node_validation(state: PipelineState) -> PipelineState:
         )
 
         agent = ValidationAgent()
-        validation_report = await agent.run(package, job_id)
+        validation_report = await agent.run(package, state["language"], job_id, progress_cb=_cb)
         package.validation_report = validation_report
 
         _stage_progress(job_id, "validation", 100,
@@ -223,10 +282,14 @@ async def node_publishing(state: PipelineState) -> PipelineState:
     if state.get("error"):
         return state
     job_id = state["job_id"]
-    _stage_progress(job_id, "publishing", 10, "Publishing package...")
+    _stage_progress(job_id, "publishing", 5, "Publishing package...")
+
+    def _cb(pct: int, msg: str) -> None:
+        _stage_progress(job_id, "publishing", pct, msg)
+
     try:
         agent = PublisherAgent()
-        package = await agent.run(state["package"], job_id)
+        package = await agent.run(state["package"], job_id, progress_cb=_cb)
         _stage_progress(job_id, "publishing", 100,
                         f"Package {package.package_id} published")
         return {**state, "package": package}
@@ -265,7 +328,7 @@ def _build_graph():
     return builder.compile()
 
 
-async def run_pipeline(job_id: str, file_path: str) -> str:
+async def run_pipeline(job_id: str, file_path: str, assessment_config=None) -> str:
     """
     Execute the full 10-stage pipeline for a document.
     Returns the package_id on success, raises on failure.
@@ -278,6 +341,7 @@ async def run_pipeline(job_id: str, file_path: str) -> str:
     initial_state: PipelineState = {
         "job_id": job_id,
         "file_path": file_path,
+        "assessment_config": assessment_config,
     }
 
     try:

@@ -28,6 +28,9 @@ attached_assets/
 *.pdf
 # venv
 venv/
+.venv/
+env/
+.env
 
 # One-off local diagnostics
 /backend/check_*.py
@@ -74,3 +77,8 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+TODO.md
+__pycache__/
+# __pycache__ 
+**/__pycache__/

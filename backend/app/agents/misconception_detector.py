@@ -1,5 +1,6 @@
 """Agent 8: Misconception Detector — identify student learning gaps."""
 from __future__ import annotations
+from typing import Callable, Optional
 from app.agents.base_agent import BaseAgent
 from app.rag.retriever import retrieve
 from app.schemas.teacher_package import DocumentMetadata, Misconception
@@ -8,20 +9,24 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 SYSTEM = """You are an expert in educational psychology and learning science.
-Identify likely student misconceptions based on the document content.
-Ground each misconception in the actual content — never speculate beyond what's in the document.
+Identify likely student misconceptions based on the provided subject-matter content.
+Ground each misconception in the actual content — never speculate beyond what's provided.
+Write naturally, as a professional teacher would.
+Write ALL content in the language specified in LANGUAGE field. Do NOT mix languages.
+Do NOT reference the source document, context, or say phrases like 'according to the document', 'based on the provided material', 'the text says', etc. Write as if the knowledge is yours.
 Respond ONLY with valid JSON."""
 
 PROMPT_TEMPLATE = """Identify potential student misconceptions for: {subject} — {topic}
 
 GRADE LEVEL: {grade}
+LANGUAGE: {language}
 KEY CONCEPTS: {concepts}
 
-DOCUMENT CONTENT:
+SOURCE MATERIAL:
 {context}
 
 Identify 4-6 common misconceptions students might develop when learning this material.
-Base these on the actual content in the document.
+Base these on the actual content in the material.
 
 Return a JSON array:
 [
@@ -42,18 +47,26 @@ class MisconceptionDetectorAgent(BaseAgent):
     max_tokens = 3000
 
     async def run(
-        self, metadata: DocumentMetadata, knowledge: dict, job_id: str
+        self, metadata: DocumentMetadata, knowledge: dict, language: str, job_id: str,
+        progress_cb: Optional[Callable[[int, str], None]] = None,
     ) -> list[Misconception]:
         logger.info("agent_start", agent=self.name, job_id=job_id)
+
+        if progress_cb:
+            progress_cb(20, "Retrieving misconception context...")
 
         chunks = retrieve(job_id, f"common errors mistakes misunderstanding {metadata.topic}", top_k=8)
         context = self.build_rag_context(chunks)
         concepts_str = ", ".join(c.name for c in knowledge.get("concepts", [])[:8])
 
+        if progress_cb:
+            progress_cb(50, "Detecting common misconceptions...")
+
         prompt = PROMPT_TEMPLATE.format(
             subject=metadata.subject,
             topic=metadata.topic,
             grade=metadata.grade,
+            language=language,
             concepts=concepts_str or "Not specified",
             context=context,
         )
@@ -61,6 +74,9 @@ class MisconceptionDetectorAgent(BaseAgent):
         data = await self.call_llm_json(prompt, SYSTEM)
         if not isinstance(data, list):
             data = data.get("misconceptions", [])
+
+        if progress_cb:
+            progress_cb(80, "Structuring misconception details...")
 
         misconceptions = []
         for item in data:
@@ -75,6 +91,9 @@ class MisconceptionDetectorAgent(BaseAgent):
                 ))
             except Exception as e:
                 logger.warning("misconception_parse_error", error=str(e))
+
+        if progress_cb:
+            progress_cb(100, f"{len(misconceptions)} misconceptions identified")
 
         logger.info("agent_complete", agent=self.name, job_id=job_id,
                     count=len(misconceptions))

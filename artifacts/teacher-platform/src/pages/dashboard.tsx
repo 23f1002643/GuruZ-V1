@@ -10,6 +10,13 @@ import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
+const GRADIENT_CLASSES = [
+  'from-indigo-500 to-purple-600',
+  'from-emerald-500 to-teal-600',
+  'from-amber-500 to-orange-600',
+  'from-rose-500 to-pink-600',
+];
+
 function StatCard({
   icon: Icon,
   label,
@@ -17,6 +24,8 @@ function StatCard({
   loading,
   testId,
   sub,
+  gradient,
+  index,
 }: {
   icon: React.ElementType;
   label: string;
@@ -24,22 +33,34 @@ function StatCard({
   loading?: boolean;
   testId?: string;
   sub?: string;
+  gradient?: string;
+  index?: number;
 }) {
   return (
-    <Card data-testid={testId}>
-      <CardContent className="pt-5">
+    <Card
+      data-testid={testId}
+      className="relative overflow-hidden border-transparent"
+    >
+      <div
+        className={cn(
+          'absolute inset-0 bg-gradient-to-br opacity-90',
+          gradient || GRADIENT_CLASSES[(index ?? 0) % GRADIENT_CLASSES.length]
+        )}
+      />
+      <div className="absolute inset-0 bg-black/20" />
+      <CardContent className="relative pt-6 pb-5 text-white">
         <div className="flex items-center justify-between mb-3">
-          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Icon className="h-4 w-4 text-primary" />
+          <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
+            <Icon className="h-5 w-5 text-white" />
           </div>
         </div>
         {loading ? (
-          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-8 w-24 bg-white/20" />
         ) : (
-          <div className="text-3xl font-display font-bold">{value ?? '—'}</div>
+          <div className="text-3xl font-display font-bold drop-shadow">{value ?? '—'}</div>
         )}
-        <div className="text-xs text-muted-foreground mt-1">{label}</div>
-        {sub && <div className="text-xs text-muted-foreground/60 mt-0.5">{sub}</div>}
+        <div className="text-white/90 text-sm mt-1 font-medium">{label}</div>
+        {sub && <div className="text-white/70 text-xs mt-0.5">{sub}</div>}
       </CardContent>
     </Card>
   );
@@ -74,7 +95,7 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
         >
           <StatCard
             icon={Package}
@@ -82,6 +103,7 @@ export default function Dashboard() {
             value={stats?.total_packages}
             loading={statsLoading}
             testId="card-stat-packages"
+            index={0}
           />
           <StatCard
             icon={ListChecks}
@@ -90,6 +112,7 @@ export default function Dashboard() {
             loading={statsLoading}
             testId="card-stat-jobs"
             sub={stats ? `${stats.completed_jobs} completed · ${stats.failed_jobs} failed` : undefined}
+            index={1}
           />
           <StatCard
             icon={Clock}
@@ -101,6 +124,7 @@ export default function Dashboard() {
             }
             loading={statsLoading}
             testId="card-stat-avg-time"
+            index={2}
           />
           <StatCard
             icon={BookOpen}
@@ -109,6 +133,7 @@ export default function Dashboard() {
             loading={statsLoading}
             testId="card-stat-subjects"
             sub={stats?.subjects?.slice(0, 3).join(', ')}
+            index={3}
           />
         </motion.div>
 

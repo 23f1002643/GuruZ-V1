@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Optional
 from app.schemas.teacher_package import TeacherKnowledgePackage
@@ -56,12 +57,87 @@ def list_packages(limit: int = 50, subject: Optional[str] = None) -> list[Teache
 
 
 def delete_package(package_id: str) -> bool:
-    """Delete a package file. Returns True if deleted."""
+    """Completely delete a package: JSON record, PDFs, artifacts, uploads, vector DB, logs."""
+    settings = get_settings()
+    deleted = False
+
+    # Resolve the job_id once, before any records are removed.
+    job_id = _get_job_from_package(package_id)
+
+    # 1. Package JSON record
     path = _packages_dir() / f"{package_id}.json"
     if path.exists():
         path.unlink()
-        return True
-    return False
+        deleted = True
+        logger.info("package_deleted_json", package_id=package_id)
+
+    # 2. Package directory containing generated PDFs/artifacts
+    package_dir = _packages_dir() / package_id
+    if package_dir.exists():
+        try:
+            shutil.rmtree(package_dir)
+            deleted = True
+            logger.info("package_deleted_dir", package_id=package_id, path=str(package_dir))
+        except Exception as e:
+            logger.warning("package_delete_dir_error", package_id=package_id, error=str(e))
+
+    # 3. Uploaded source file (data/uploads/{job_id}_{filename})
+    if job_id:
+        try:
+            upload_dir = Path(settings.upload_dir)
+            if upload_dir.exists():
+                for f in upload_dir.glob(f"{job_id}_*"):
+                    f.unlink(missing_ok=True)
+                    logger.info("package_deleted_upload", package_id=package_id, file=str(f))
+        except Exception as e:
+            logger.warning("package_delete_upload_error", package_id=package_id, error=str(e))
+
+    # 4. Vector DB collection
+    if job_id:
+        try:
+            from app.rag.retriever import delete_collection
+            delete_collection(job_id)
+            logger.info("package_deleted_vector", package_id=package_id, job_id=job_id)
+        except Exception as e:
+            logger.warning("package_delete_vector_error", package_id=package_id, error=str(e))
+
+    # 5. Logs related to this package's jobs
+    if job_id:
+        try:
+            delete_logs_for_job(job_id)
+        except Exception as e:
+            logger.warning("package_delete_logs_error", package_id=package_id, error=str(e))
+
+    return deleted
+
+
+def _get_job_from_package(package_id: str) -> Optional[str]:
+    """Try to find the job_id associated with a package (from job store or package record)."""
+    try:
+        from app.services import job_service
+        for j in job_service.list_jobs(limit=100000):
+            if j.package_id == package_id:
+                return j.job_id
+    except Exception:
+        pass
+    try:
+        json_path = _packages_dir() / f"{package_id}.json"
+        if json_path.exists():
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("job_id")
+    except Exception:
+        pass
+    return None
+
+
+def delete_logs_for_job(job_id: str) -> None:
+    """Remove all log entries associated with a job."""
+    try:
+        from app.utils.logger import clear_logs_for_job
+        clear_logs_for_job(job_id)
+    except Exception:
+        pass
 
 
 def get_stats() -> dict:

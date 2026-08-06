@@ -150,17 +150,66 @@ class NumericalProblem(BaseModel):
     source_chunks: list[str] = Field(default_factory=list)
 
 
+class CaseStudy(BaseModel):
+    question_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    scenario: str
+    questions: list[str] = Field(default_factory=list)
+    model_answer: str = ""
+    marks: int = 5
+    difficulty: Literal["easy", "medium", "hard"] = "medium"
+    source_chunks: list[str] = Field(default_factory=list)
+
+
+class HOTQuestion(BaseModel):
+    question_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    question: str
+    model_answer: str = ""
+    level: str = "analysis"
+    marks: int = 4
+    difficulty: Literal["easy", "medium", "hard"] = "hard"
+    source_chunks: list[str] = Field(default_factory=list)
+
+
+class DiagramQuestion(BaseModel):
+    question_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    question: str
+    diagram_prompt: str = ""
+    model_answer: str = ""
+    marks: int = 3
+    difficulty: Literal["easy", "medium", "hard"] = "medium"
+    source_chunks: list[str] = Field(default_factory=list)
+
+
+class AssessmentConfig(BaseModel):
+    """User-selected configuration for assessment generation."""
+    mcq_count: int = 6
+    include_mcq: bool = True
+    include_short_answer: bool = True
+    include_long_answer: bool = True
+    include_numerical: bool = True
+    include_case_study: bool = False
+    include_hots: bool = False
+    include_diagram: bool = False
+    include_answer_key: bool = True
+
+
 class AssessmentBank(BaseModel):
     total_questions: int = 0
     mcqs: list[MCQ] = Field(default_factory=list)
     short_answers: list[ShortAnswer] = Field(default_factory=list)
     long_answers: list[LongAnswer] = Field(default_factory=list)
     numerical: list[NumericalProblem] = Field(default_factory=list)
+    case_studies: list[CaseStudy] = Field(default_factory=list)
+    hots: list[HOTQuestion] = Field(default_factory=list)
+    diagram_questions: list[DiagramQuestion] = Field(default_factory=list)
+    config: Optional[AssessmentConfig] = None
 
     def compute_total(self) -> "AssessmentBank":
         self.total_questions = (
             len(self.mcqs) + len(self.short_answers) +
-            len(self.long_answers) + len(self.numerical)
+            len(self.long_answers) + len(self.numerical) +
+            len(self.case_studies) + len(self.hots) +
+            len(self.diagram_questions)
         )
         return self
 

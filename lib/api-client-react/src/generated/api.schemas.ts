@@ -14,6 +14,9 @@ export interface DetailedHealth {
   version: string;
   llm_provider: string;
   llm_status: string;
+  grok_status: string;
+  gemini_status: string;
+  ollama_status: string;
   chromadb_status: string;
   uptime_seconds: number;
   total_jobs: number;
@@ -22,8 +25,11 @@ export interface DetailedHealth {
 
 export interface DocumentUpload {
   file: Blob;
-  /** @nullable */
-  language?: string | null;
+  /**
+     * JSON string of AssessmentConfig for assessment generation
+     * @nullable
+     */
+  assessment_config?: string | null;
 }
 
 export interface JobCreated {
@@ -426,12 +432,14 @@ export type SettingsLlmProvider = typeof SettingsLlmProvider[keyof typeof Settin
 
 export const SettingsLlmProvider = {
   auto: 'auto',
+  grok: 'grok',
   gemini: 'gemini',
   ollama: 'ollama',
 } as const;
 
 export interface Settings {
   llm_provider: SettingsLlmProvider;
+  grok_model: string;
   ollama_model: string;
   ollama_base_url: string;
   gemini_model: string;
@@ -450,6 +458,7 @@ export type SettingsUpdateLlmProvider = typeof SettingsUpdateLlmProvider[keyof t
 
 export const SettingsUpdateLlmProvider = {
   auto: 'auto',
+  grok: 'grok',
   gemini: 'gemini',
   ollama: 'ollama',
 } as const;
@@ -457,6 +466,8 @@ export const SettingsUpdateLlmProvider = {
 export interface SettingsUpdate {
   /** @nullable */
   llm_provider?: SettingsUpdateLlmProvider;
+  /** @nullable */
+  grok_model?: string | null;
   /** @nullable */
   ollama_model?: string | null;
   /** @nullable */
@@ -524,6 +535,29 @@ export type GetLogsLevel = typeof GetLogsLevel[keyof typeof GetLogsLevel] | null
 
 
 export const GetLogsLevel = {
+  debug: 'debug',
+  info: 'info',
+  warning: 'warning',
+  error: 'error',
+  critical: 'critical',
+} as const;
+
+export type DownloadLogsParams = {
+limit?: number;
+/**
+ * @nullable
+ */
+level?: DownloadLogsLevel;
+/**
+ * @nullable
+ */
+job_id?: string | null;
+};
+
+export type DownloadLogsLevel = typeof DownloadLogsLevel[keyof typeof DownloadLogsLevel] | null;
+
+
+export const DownloadLogsLevel = {
   debug: 'debug',
   info: 'info',
   warning: 'warning',

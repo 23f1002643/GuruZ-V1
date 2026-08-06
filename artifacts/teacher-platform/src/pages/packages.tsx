@@ -1,18 +1,45 @@
 import { useState } from 'react';
-import { useListPackages } from '@workspace/api-client-react';
+import {
+  useListPackages,
+  useDeletePackage,
+  getListPackagesQueryKey,
+} from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 import { Link } from 'wouter';
 import { formatDate } from '@/lib/utils';
-import { Search, Package, BookOpen, GraduationCap, Star } from 'lucide-react';
+import { Search, Package, BookOpen, GraduationCap, Star, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function PackagesPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: packages, isLoading } = useListPackages({ limit: 200 });
+  const deletePackageMutation = useDeletePackage();
+
+  const handleDelete = async (e: React.MouseEvent, packageId: string, filename?: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm(`Delete package "${filename ?? packageId}"? This removes all related data.`)) return;
+    try {
+      await deletePackageMutation.mutateAsync({ packageId });
+      toast({ title: 'Package deleted', description: `${filename} was removed.` });
+      queryClient.invalidateQueries({ queryKey: getListPackagesQueryKey() });
+    } catch (error) {
+      toast({
+        title: 'Failed to delete package',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const filtered = packages?.filter((pkg) => {
     const q = searchQuery.toLowerCase();
@@ -109,16 +136,28 @@ export default function PackagesPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between pt-1 border-t border-border">
+<div className="flex items-center justify-between pt-1 border-t border-border">
                           <div className="text-xs text-muted-foreground">
                             {pkg.created_at ? formatDate(pkg.created_at) : '—'}
                           </div>
-                          {pkg.validation_score !== null && pkg.validation_score !== undefined && (
-                            <div className="flex items-center gap-1 text-xs font-mono">
-                              <Star className="h-3 w-3 text-yellow-500" />
-                              <span>{(pkg.validation_score * 100).toFixed(0)}%</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {pkg.validation_score !== null && pkg.validation_score !== undefined && (
+                              <div className="flex items-center gap-1 text-xs font-mono">
+                                <Star className="h-3 w-3 text-yellow-500" />
+                                <span>{(pkg.validation_score * 100).toFixed(0)}%</span>
+                              </div>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              onClick={(e) => handleDelete(e, pkg.package_id, pkg.filename)}
+                              disabled={deletePackageMutation.isPending}
+                              data-testid={`button-delete-package-${pkg.package_id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>

@@ -14,7 +14,8 @@ _overrides: dict = {}
 
 
 class SettingsUpdate(BaseModel):
-    llm_provider: Optional[Literal["auto", "gemini", "ollama"]] = None
+    llm_provider: Optional[Literal["auto", "grok", "gemini", "ollama"]] = None
+    grok_model: Optional[str] = None
     ollama_model: Optional[str] = None
     ollama_base_url: Optional[str] = None
     gemini_model: Optional[str] = None
@@ -31,6 +32,7 @@ async def get_settings_endpoint():
     s = get_settings()
     return {
         "llm_provider": _overrides.get("llm_provider", s.llm_provider),
+        "grok_model": _overrides.get("grok_model", s.grok_model),
         "ollama_model": _overrides.get("ollama_model", s.ollama_model),
         "ollama_base_url": _overrides.get("ollama_base_url", s.ollama_base_url),
         "gemini_model": _overrides.get("gemini_model", s.gemini_model),

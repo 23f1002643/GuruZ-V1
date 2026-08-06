@@ -1,5 +1,6 @@
 """Agent 4: Teaching Planner — create multi-period teaching strategy."""
 from __future__ import annotations
+from typing import Callable, Optional
 from app.agents.base_agent import BaseAgent
 from app.rag.retriever import retrieve
 from app.schemas.teacher_package import DocumentMetadata, TeachingPlan, PeriodSummary
@@ -9,7 +10,10 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 SYSTEM = """You are an experienced curriculum designer and master teacher.
-Design a comprehensive, pedagogically sound teaching plan based only on the provided document content.
+Design a comprehensive, pedagogically sound teaching plan based only on the provided subject-matter content.
+Write naturally, as a professional curriculum designer would.
+Write ALL content in the language specified in LANGUAGE field. Do NOT mix languages.
+Do NOT reference the source document, context, or say phrases like 'according to the document', 'based on the provided material', 'the text says', etc. Write as if the knowledge is yours.
 Respond ONLY with valid JSON."""
 
 PROMPT_TEMPLATE = """Design a complete teaching plan for this educational content.
@@ -18,10 +22,11 @@ SUBJECT: {subject}
 TOPIC: {topic}
 GRADE: {grade}
 DIFFICULTY: {difficulty}
+LANGUAGE: {language}
 LEARNING OBJECTIVES: {objectives}
 PERIOD DURATION: {period_duration} minutes
 
-DOCUMENT EXCERPTS:
+SOURCE MATERIAL:
 {context}
 
 Design the optimal number of periods needed to thoroughly cover this content.
@@ -49,10 +54,14 @@ class TeachingPlannerAgent(BaseAgent):
     max_tokens = 3000
 
     async def run(
-        self, metadata: DocumentMetadata, knowledge: dict, job_id: str
+        self, metadata: DocumentMetadata, knowledge: dict, language: str, job_id: str,
+        progress_cb: Optional[Callable[[int, str], None]] = None,
     ) -> TeachingPlan:
         logger.info("agent_start", agent=self.name, job_id=job_id)
         settings = get_settings()
+
+        if progress_cb:
+            progress_cb(20, "Retrieving curriculum context...")
 
         chunks = retrieve(
             job_id,
@@ -62,17 +71,24 @@ class TeachingPlannerAgent(BaseAgent):
         context = self.build_rag_context(chunks)
         objectives_str = "\n".join(f"- {o}" for o in knowledge.get("learning_objectives", []))
 
+        if progress_cb:
+            progress_cb(50, "Designing multi-period teaching strategy...")
+
         prompt = PROMPT_TEMPLATE.format(
             subject=metadata.subject,
             topic=metadata.topic,
             grade=metadata.grade,
             difficulty=metadata.difficulty,
+            language=language,
             objectives=objectives_str or "Not specified",
             period_duration=settings.period_duration_minutes,
             context=context,
         )
 
         data = await self.call_llm_json(prompt, SYSTEM)
+
+        if progress_cb:
+            progress_cb(80, "Structuring period plan...")
 
         period_plan = [
             PeriodSummary(
@@ -90,6 +106,9 @@ class TeachingPlannerAgent(BaseAgent):
             overview=data.get("overview", ""),
             period_plan=period_plan,
         )
+
+        if progress_cb:
+            progress_cb(100, f"{plan.total_periods} periods planned")
 
         logger.info("agent_complete", agent=self.name, job_id=job_id,
                     total_periods=plan.total_periods)

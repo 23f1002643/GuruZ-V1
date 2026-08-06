@@ -1,4 +1,4 @@
-"""LLM Router: Gemini (primary) → Ollama (fallback) with auto-detection."""
+"""LLM Router: Grok (primary) → Gemini → Ollama with auto-detection."""
 from __future__ import annotations
 import asyncio
 from typing import Any, Optional
@@ -7,11 +7,34 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_llm_status: dict[str, str] = {"gemini": "unknown", "ollama": "unknown", "active": "unknown"}
+_llm_status: dict[str, str] = {
+    "grok": "unknown",
+    "gemini": "unknown",
+    "ollama": "unknown",
+    "active": "unknown",
+}
 
 
 def get_llm_status() -> dict[str, str]:
     return dict(_llm_status)
+
+
+async def _check_grok() -> bool:
+    """Return True if Grok (xAI) API key is configured and reachable."""
+    settings = get_settings()
+    if not settings.grok_api_key:
+        return False
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                "https://api.x.ai/v1/models",
+                headers={"Authorization": f"Bearer {settings.grok_api_key}"},
+            )
+            return r.status_code == 200
+    except Exception as e:
+        logger.warning("grok_check_failed", error=str(e))
+        return False
 
 
 async def _check_gemini() -> bool:
@@ -44,6 +67,7 @@ async def _check_ollama() -> bool:
     except Exception as e:
         logger.warning("ollama_check_failed", error=str(e))
         return False
+
 
 async def _list_ollama_models() -> list[str]:
     """List models available from the local Ollama instance."""
@@ -82,10 +106,17 @@ async def _select_ollama_model() -> Optional[str]:
     # Fall back to the first available local Ollama model
     return available_models[0]
 
+
 async def resolve_provider() -> str:
     """Determine the active LLM provider based on config and availability."""
     settings = get_settings()
     provider = settings.llm_provider
+
+    if provider == "grok":
+        ok = await _check_grok()
+        _llm_status["grok"] = "available" if ok else "unavailable"
+        _llm_status["active"] = "grok"
+        return "grok"
 
     if provider == "gemini":
         ok = await _check_gemini()
@@ -99,13 +130,17 @@ async def resolve_provider() -> str:
         _llm_status["active"] = "ollama"
         return "ollama"
 
-    # auto: try Gemini first, fallback to Ollama
-    gemini_ok, ollama_ok = await asyncio.gather(
-        _check_gemini(), _check_ollama()
+    # auto: try Grok first, then Gemini, then Ollama
+    grok_ok, gemini_ok, ollama_ok = await asyncio.gather(
+        _check_grok(), _check_gemini(), _check_ollama()
     )
+    _llm_status["grok"] = "available" if grok_ok else "unavailable"
     _llm_status["gemini"] = "available" if gemini_ok else "unavailable"
     _llm_status["ollama"] = "available" if ollama_ok else "unavailable"
 
+    if grok_ok:
+        _llm_status["active"] = "grok"
+        return "grok"
     if gemini_ok:
         _llm_status["active"] = "gemini"
         return "gemini"
@@ -119,7 +154,7 @@ async def resolve_provider() -> str:
 
 
 class LLMRouter:
-    """Async LLM client that routes to Gemini or Ollama transparently."""
+    """Async LLM client that routes to Grok, Gemini, or Ollama transparently."""
 
     def __init__(self) -> None:
         self._provider: Optional[str] = None
@@ -138,21 +173,34 @@ class LLMRouter:
 
         for attempt in range(retries):
             try:
-                if provider == "gemini":
+                if provider == "grok":
+                    result = await self._call_grok(prompt, system, temperature, max_tokens)
+                    return result
+                elif provider == "gemini":
                     result = await self._call_gemini(prompt, system, temperature, max_tokens)
                     return result
                 elif provider == "ollama":
                     result = await self._call_ollama(prompt, system, temperature, max_tokens)
                     return result
                 else:
-                    raise RuntimeError("No LLM provider available. Configure GEMINI_API_KEY or start Ollama.")
+                    raise RuntimeError("No LLM provider available. Configure GROK_API_KEY, GEMINI_API_KEY, or start Ollama.")
             except Exception as e:
                 last_error = e
                 logger.warning("llm_attempt_failed", attempt=attempt + 1,
                                provider=provider, error=str(e))
                 if attempt < retries - 1:
-                    # Try switching provider on failure
-                    if provider == "gemini":
+                    # Try switching provider on failure (Grok -> Gemini -> Ollama)
+                    if provider == "grok":
+                        gemini_ok, ollama_ok = await asyncio.gather(
+                            _check_gemini(), _check_ollama()
+                        )
+                        if gemini_ok:
+                            provider = "gemini"
+                            self._provider = "gemini"
+                        elif ollama_ok:
+                            provider = "ollama"
+                            self._provider = "ollama"
+                    elif provider == "gemini":
                         ollama_ok = await _check_ollama()
                         if ollama_ok:
                             provider = "ollama"
@@ -160,6 +208,38 @@ class LLMRouter:
                     await asyncio.sleep(1.5 ** attempt)
 
         raise RuntimeError(f"LLM generation failed after {retries} attempts: {last_error}")
+
+    async def _call_grok(self, prompt: str, system: str,
+                         temperature: float, max_tokens: int) -> str:
+        """Call Grok via xAI's OpenAI-compatible API."""
+        settings = get_settings()
+        import httpx
+
+        url = "https://api.x.ai/v1/chat/completions"
+        payload = {
+            "model": settings.grok_model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.grok_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+
+        content = data["choices"][0]["message"]["content"]
+        if not content or not content.strip():
+            raise RuntimeError("Grok returned an empty response.")
+        return content
 
     async def _call_gemini(self, prompt: str, system: str,
                             temperature: float, max_tokens: int) -> str:
@@ -226,7 +306,12 @@ class LLMRouter:
                     )
             r.raise_for_status()
             data = r.json()
-            return data.get("response", "")
+            response = data.get("response", "")
+            if not response or not response.strip():
+                raise RuntimeError(
+                    f"Ollama returned an empty response for model '{model_name}'."
+                )
+            return response
 
     def reset(self) -> None:
         """Force re-detection of provider on next call."""

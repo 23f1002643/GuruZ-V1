@@ -4,8 +4,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,20 +16,102 @@ import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 
 const ACCEPTED_TYPES = '.pdf,.docx,.pptx,.txt';
-const LANGUAGES = [
-  { value: 'en', label: 'English' },
-  { value: 'es', label: 'Spanish' },
-  { value: 'fr', label: 'French' },
-  { value: 'de', label: 'German' },
-  { value: 'zh', label: 'Chinese' },
-  { value: 'hi', label: 'Hindi' },
-];
+
+interface AssessmentConfig {
+  mcq_count: number;
+  include_mcq: boolean;
+  include_short_answer: boolean;
+  include_long_answer: boolean;
+  include_numerical: boolean;
+  include_case_study: boolean;
+  include_hots: boolean;
+  include_diagram: boolean;
+  include_answer_key: boolean;
+}
+
+const DEFAULT_CONFIG: AssessmentConfig = {
+  mcq_count: 6,
+  include_mcq: true,
+  include_short_answer: true,
+  include_long_answer: true,
+  include_numerical: true,
+  include_case_study: false,
+  include_hots: false,
+  include_diagram: false,
+  include_answer_key: true,
+};
+
+function AssessmentConfigPanel({
+  config,
+  onChange,
+}: {
+  config: AssessmentConfig;
+  onChange: (config: AssessmentConfig) => void;
+}) {
+  const toggle = (key: keyof AssessmentConfig) => {
+    onChange({ ...config, [key]: !config[key] });
+  };
+
+  const checkboxes: { key: keyof AssessmentConfig; label: string }[] = [
+    { key: 'include_mcq', label: 'MCQ' },
+    { key: 'include_short_answer', label: 'Short Answer' },
+    { key: 'include_long_answer', label: 'Long Answer' },
+    { key: 'include_numerical', label: 'Numericals' },
+    { key: 'include_case_study', label: 'Case Study' },
+    { key: 'include_hots', label: 'HOTS' },
+    { key: 'include_diagram', label: 'Diagram Questions' },
+    { key: 'include_answer_key', label: 'Answer Key' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="mcq-count" className="text-sm font-medium">
+          MCQ Count
+        </Label>
+        <div className="w-24">
+          <Input
+            id="mcq-count"
+            type="number"
+            min={0}
+            max={50}
+            value={config.mcq_count}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                mcq_count: Math.max(0, parseInt(e.target.value || '0', 10)),
+              })
+            }
+            className="text-right"
+            data-testid="input-mcq-count"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 pt-2 border-t border-border">
+        {checkboxes.map(({ key, label }) => (
+          <label
+            key={key}
+            className="flex items-center gap-2 text-sm cursor-pointer select-none"
+            data-testid={`checkbox-${key}`}
+          >
+            <Checkbox
+              checked={config[key] as boolean}
+              onCheckedChange={() => toggle(key)}
+            />
+            <span className="text-muted-foreground">{label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [language, setLanguage] = useState<string>('en');
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [assessmentConfig, setAssessmentConfig] = useState<AssessmentConfig>(DEFAULT_CONFIG);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -79,9 +163,7 @@ export default function UploadPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      if (language) {
-        formData.append('language', language);
-      }
+      formData.append('assessment_config', JSON.stringify(assessmentConfig));
 
       const response = await fetch('/api/upload', {
         method: 'POST',
@@ -197,21 +279,20 @@ export default function UploadPage() {
                 )}
               </div>
 
-              {/* Language Selector */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Language</label>
-                <Select value={language} onValueChange={setLanguage}>
-                  <SelectTrigger data-testid="select-language">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LANGUAGES.map((lang) => (
-                      <SelectItem key={lang.value} value={lang.value}>
-                        {lang.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+{/* Assessment Configuration */}
+              <div className="rounded-lg border border-border p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-sm">Assessment Configuration</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Select the question types to generate
+                    </div>
+                  </div>
+                </div>
+                <AssessmentConfigPanel
+                  config={assessmentConfig}
+                  onChange={setAssessmentConfig}
+                />
               </div>
 
               {/* Upload Button */}

@@ -295,6 +295,73 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LogEntry"
+    delete:
+      operationId: deleteAllLogs
+      tags: [logs]
+      summary: Delete all system log entries
+      responses:
+        "200":
+          description: All logs deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /logs/download:
+    get:
+      operationId: downloadLogs
+      tags: [logs]
+      summary: Download logs as plain text
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 1000
+        - name: level
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: ["debug", "info", "warning", "error", "critical", null]
+        - name: job_id
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Logs as plain text
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /logs/{index}:
+    delete:
+      operationId: deleteLog
+      tags: [logs]
+      summary: Delete a single log entry by index
+      parameters:
+        - name: index
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Log entry deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Log entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /settings:
     get:
@@ -371,9 +438,9 @@ components:
         file:
           type: string
           format: binary
-        language:
+        assessment_config:
           type: ["string", "null"]
-          default: "English"
+          description: JSON string of AssessmentConfig for assessment generation
       required:
         - file
 
@@ -1086,7 +1153,9 @@ components:
       properties:
         llm_provider:
           type: string
-          enum: ["auto", "gemini", "ollama"]
+          enum: ["auto", "grok", "gemini", "ollama"]
+        grok_model:
+          type: string
         ollama_model:
           type: string
         ollama_base_url:
@@ -1119,7 +1188,9 @@ components:
       properties:
         llm_provider:
           type: ["string", "null"]
-          enum: ["auto", "gemini", "ollama", null]
+          enum: ["auto", "grok", "gemini", "ollama", null]
+        grok_model:
+          type: ["string", "null"]
         ollama_model:
           type: ["string", "null"]
         ollama_base_url:

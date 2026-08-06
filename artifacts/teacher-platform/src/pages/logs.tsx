@@ -1,12 +1,19 @@
 import { useState } from 'react';
-import { useGetLogs } from '@workspace/api-client-react';
+import {
+  useGetLogs,
+  useDeleteLog,
+  useDeleteAllLogs,
+  getGetLogsQueryKey,
+} from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw, Search } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { RefreshCw, Search, Trash2, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -29,11 +36,56 @@ const LEVEL_BG: Record<string, string> = {
 export default function LogsPage() {
   const [levelFilter, setLevelFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const { data: logs, isLoading, refetch, isFetching } = useGetLogs({
+const { data: logs, isLoading, refetch, isFetching } = useGetLogs({
     limit: 200,
-    level: levelFilter === 'all' ? undefined : levelFilter,
+    level:
+      levelFilter === 'all'
+        ? undefined
+        : (levelFilter as 'debug' | 'info' | 'warning' | 'error' | 'critical'),
   });
+
+  const deleteLogMutation = useDeleteLog();
+  const deleteAllLogsMutation = useDeleteAllLogs();
+
+  const invalidateLogs = () => {
+    queryClient.invalidateQueries({ queryKey: getGetLogsQueryKey() });
+  };
+
+  const handleDeleteLog = async (index: number) => {
+    try {
+      await deleteLogMutation.mutateAsync({ index });
+      toast({ title: 'Log deleted' });
+      invalidateLogs();
+    } catch (error) {
+      toast({
+        title: 'Failed to delete log',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteAllLogs = async () => {
+    if (!window.confirm('Delete all system logs? This cannot be undone.')) return;
+    try {
+      await deleteAllLogsMutation.mutateAsync();
+      toast({ title: 'All logs deleted' });
+      invalidateLogs();
+    } catch (error) {
+      toast({
+        title: 'Failed to delete logs',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDownloadLogs = () => {
+    window.open('/api/logs/download', '_blank');
+  };
 
   const filtered = logs?.filter((log) => {
     if (!searchQuery) return true;
@@ -51,16 +103,37 @@ export default function LogsPage() {
         title="System Logs"
         description="Real-time pipeline and system event log"
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            data-testid="button-refresh-logs"
-          >
-            <RefreshCw className={cn('h-4 w-4 mr-2', isFetching && 'animate-spin')} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadLogs}
+              data-testid="button-download-logs"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDeleteAllLogs}
+              disabled={deleteAllLogsMutation.isPending}
+              data-testid="button-delete-all-logs"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear All
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              data-testid="button-refresh-logs"
+            >
+              <RefreshCw className={cn('h-4 w-4 mr-2', isFetching && 'animate-spin')} />
+              Refresh
+            </Button>
+          </div>
         }
       />
 
@@ -158,8 +231,19 @@ export default function LogsPage() {
                         </span>
                       )}
 
-                      {/* Message */}
+{/* Message */}
                       <span className="flex-1 break-all">{log.message}</span>
+
+                      {/* Delete */}
+                      <button
+                        onClick={() => handleDeleteLog(i)}
+                        disabled={deleteLogMutation.isPending}
+                        className="flex-shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                        data-testid={`button-delete-log-${i}`}
+                        aria-label="Delete log"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
