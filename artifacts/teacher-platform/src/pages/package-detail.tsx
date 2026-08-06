@@ -494,7 +494,7 @@ export default function PackageDetailPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                         <div>
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                             <span>Overall Score</span>
