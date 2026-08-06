@@ -69,13 +69,21 @@ async def resolve_provider() -> str:
     if provider == "nvidia":
         nvidia_ok = await _check_nvidia()
         _llm_status["nvidia"] = "available" if nvidia_ok else "unavailable"
-        _llm_status["active"] = "nvidia"
+        _llm_status["groq"] = "unknown"
+        _llm_status["active"] = "nvidia" if nvidia_ok else "none"
+        if not nvidia_ok:
+            logger.warning("nvidia_unavailable", active_provider="none")
+            return "none"
         return "nvidia"
 
     if provider == "groq":
         groq_ok = await _check_groq()
         _llm_status["groq"] = "available" if groq_ok else "unavailable"
-        _llm_status["active"] = "groq"
+        _llm_status["nvidia"] = "unknown"
+        _llm_status["active"] = "groq" if groq_ok else "none"
+        if not groq_ok:
+            logger.warning("groq_unavailable", active_provider="none")
+            return "none"
         return "groq"
 
     nvidia_ok, groq_ok = await asyncio.gather(_check_nvidia(), _check_groq())

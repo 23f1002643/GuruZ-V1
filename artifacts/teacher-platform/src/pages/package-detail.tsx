@@ -6,8 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { formatDate } from '@/lib/utils';
-import { ArrowLeft, BookOpen, Target, Brain, CheckSquare, AlertTriangle, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  BookOpen,
+  Target,
+  Brain,
+  CheckSquare,
+  AlertTriangle,
+  ShieldCheck,
+  Info,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -16,9 +26,7 @@ export default function PackageDetailPage() {
   const packageId = params.id as string;
   const [activeTab, setActiveTab] = useState('overview');
 
-  const { data: pkg, isLoading } = useGetPackage(packageId, {
-    query: { enabled: !!packageId },
-  });
+  const { data: pkg, isLoading } = useGetPackage(packageId);
 
   if (isLoading) {
     return (
@@ -50,13 +58,20 @@ export default function PackageDetailPage() {
     );
   }
 
-  const scoreColor = pkg.validation_report?.overall_score
-    ? pkg.validation_report.overall_score >= 0.8
+  const overallScore = pkg.validation_report?.overall_score;
+  const hallucinationScore = pkg.validation_report?.hallucination_score;
+  const completenessScore = pkg.validation_report?.completeness_score;
+
+  const scoreColor = overallScore != null
+    ? overallScore >= 0.8
       ? 'text-emerald-400'
-      : pkg.validation_report.overall_score >= 0.6
+      : overallScore >= 0.6
       ? 'text-yellow-400'
       : 'text-red-400'
     : 'text-muted-foreground';
+
+  const formatPercent = (value?: number) =>
+    value != null ? `${(value * 100).toFixed(0)}%` : '—';
 
   return (
     <div className="flex-1 overflow-auto">
@@ -94,9 +109,7 @@ export default function PackageDetailPage() {
                 <div className="text-right">
                   <div className="text-xs text-muted-foreground mb-1">Validation Score</div>
                   <div className={cn('text-4xl font-display font-bold', scoreColor)}>
-                    {pkg.validation_report?.overall_score
-                      ? `${(pkg.validation_report.overall_score * 100).toFixed(0)}%`
-                      : '—'}
+                    {overallScore != null ? formatPercent(overallScore) : '—'}
                   </div>
                 </div>
               </div>
@@ -212,7 +225,7 @@ export default function PackageDetailPage() {
                             {concept.importance}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground">{concept.description}</p>
+                        <p className="text-xs text-muted-foreground">{concept.explanation}</p>
                       </div>
                     ))}
                     {!pkg.concepts?.length && (
@@ -266,9 +279,6 @@ export default function PackageDetailPage() {
                     <CardContent className="space-y-3">
                       <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
                         <span>{lesson.duration_minutes} min</span>
-                        {lesson.prior_knowledge_check && (
-                          <span className="text-primary">Prior knowledge check included</span>
-                        )}
                       </div>
                       {lesson.objectives && (
                         <div>
@@ -318,7 +328,7 @@ export default function PackageDetailPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      <p className="text-sm text-muted-foreground">{activity.description}</p>
+                      <p className="text-sm text-muted-foreground">{activity.teacher_instructions}</p>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
                         <span>{activity.duration_minutes} min</span>
                         {activity.materials && (
@@ -395,7 +405,7 @@ export default function PackageDetailPage() {
                           <div key={i} className="p-3 border border-border rounded-lg">
                             <div className="font-medium text-sm mb-1">Q{i + 1}. {q.question}</div>
                             <div className="text-xs text-muted-foreground">
-                              {q.expected_answer_outline}
+                              {q.model_answer}
                             </div>
                           </div>
                         ))}
@@ -431,7 +441,7 @@ export default function PackageDetailPage() {
                         />
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="font-medium text-sm">{m.description}</span>
+                            <span className="font-medium text-sm">{m.misconception}</span>
                             <span
                               className={cn(
                                 'text-xs font-mono px-2 py-0.5 rounded uppercase',
@@ -450,18 +460,12 @@ export default function PackageDetailPage() {
                               <strong>Correct:</strong> {m.correct_understanding}
                             </div>
                           )}
-                          {m.remedial_actions && m.remedial_actions.length > 0 && (
+                          {m.remedial_action && (
                             <div>
                               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-                                Remedial Actions
+                                Remedial Action
                               </div>
-                              <ul className="space-y-1">
-                                {m.remedial_actions.map((a, j) => (
-                                  <li key={j} className="text-xs text-muted-foreground flex gap-2">
-                                    <span className="text-primary">·</span> {a}
-                                  </li>
-                                ))}
-                              </ul>
+                              <div className="text-xs text-muted-foreground">{m.remedial_action}</div>
                             </div>
                           )}
                         </div>
@@ -492,29 +496,67 @@ export default function PackageDetailPage() {
                     <CardContent>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                          <div className="text-xs text-muted-foreground mb-1">Overall Score</div>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                            <span>Overall Score</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="inline-flex items-center">
+                                  <Info className="h-3 w-3 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                A weighted quality score from hallucination, schema checks, coverage, and evidence.
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                           <div className={cn('text-2xl font-display font-bold', scoreColor)}>
-                            {(pkg.validation_report.overall_score * 100).toFixed(0)}%
+                            {formatPercent(overallScore)}
                           </div>
                         </div>
                         <div>
-                          <div className="text-xs text-muted-foreground mb-1">Hallucination Risk</div>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                            <span>Hallucination Risk</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="inline-flex items-center">
+                                  <Info className="h-3 w-3 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Lower is better. This score estimates how much generated content is grounded in source material.
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                           <div className="text-2xl font-display font-bold">
-                            {(pkg.validation_report.hallucination_score * 100).toFixed(0)}%
+                            {formatPercent(hallucinationScore)}
                           </div>
                         </div>
                         <div>
-                          <div className="text-xs text-muted-foreground mb-1">Completeness</div>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                            <span>Completeness</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="inline-flex items-center">
+                                  <Info className="h-3 w-3 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Evaluates whether the package covers key objectives and core content from the document.
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                           <div className="text-2xl font-display font-bold">
-                            {(pkg.validation_report.completeness_score * 100).toFixed(0)}%
+                            {formatPercent(completenessScore)}
                           </div>
                         </div>
                         <div>
                           <div className="text-xs text-muted-foreground mb-1">Valid</div>
-                          <div className={cn(
-                            'text-2xl font-display font-bold',
-                            pkg.validation_report.is_valid ? 'text-emerald-400' : 'text-red-400'
-                          )}>
+                          <div
+                            className={cn(
+                              'text-2xl font-display font-bold',
+                              pkg.validation_report.is_valid ? 'text-emerald-400' : 'text-red-400'
+                            )}
+                          >
                             {pkg.validation_report.is_valid ? 'Yes' : 'No'}
                           </div>
                         </div>

@@ -124,6 +124,13 @@ class ValidationAgent(BaseAgent):
         schema_valid = bool(data.get("schema_valid", True))
         all_objectives_covered = bool(data.get("all_objectives_covered", True))
         source_chunks_verified = bool(data.get("source_chunks_verified", True))
+        completeness_score = data.get("completeness_score")
+        if completeness_score is None:
+            completeness_score = (
+                (1.0 if all_objectives_covered else 0.0) * 0.55
+                + (1.0 if source_chunks_verified else 0.0) * 0.35
+                + (1.0 if schema_valid else 0.0) * 0.1
+            )
 
         issues = [
             ValidationIssue(
@@ -156,6 +163,7 @@ class ValidationAgent(BaseAgent):
             is_valid=is_valid,
             overall_score=round(overall_score, 3),
             hallucination_score=round(hallucination_score, 3),
+            completeness_score=round(float(completeness_score), 3),
             schema_valid=schema_valid,
             all_objectives_covered=all_objectives_covered,
             source_chunks_verified=source_chunks_verified,

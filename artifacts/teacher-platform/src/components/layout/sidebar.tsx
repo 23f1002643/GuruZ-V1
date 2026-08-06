@@ -35,7 +35,7 @@ export function Sidebar() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-display font-bold tracking-tight">
-              AI Teacher
+              GuruZ
             </h1>
             <p className="text-xs text-muted-foreground font-mono mt-0.5">
               PLATFORM v1.0
@@ -60,14 +60,14 @@ export function Sidebar() {
           <div
             className={cn(
               'h-2 w-2 rounded-full',
-              health?.status === 'healthy'
+              health?.status === 'ok' || health?.status === 'healthy'
                 ? 'bg-emerald-500 animate-pulse'
                 : 'bg-red-500'
             )}
             data-testid="indicator-health-status"
           />
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-            {health?.status === 'healthy' ? 'Online' : 'Offline'}
+            {health?.status === 'ok' || health?.status === 'healthy' ? 'Online' : 'Offline'}
           </span>
         </div>
       </div>

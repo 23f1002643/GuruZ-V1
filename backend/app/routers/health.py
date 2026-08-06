@@ -19,6 +19,7 @@ async def health_check():
 @router.get("/health/detailed")
 async def detailed_health():
     settings = get_settings()
+    active_provider = await resolve_provider()
     llm_status = get_llm_status()
     chroma_status = get_chroma_status()
     all_jobs = list_jobs(limit=10000)
@@ -28,6 +29,7 @@ async def detailed_health():
         "status": "ok",
         "version": "1.0.0",
         "llm_provider": settings.llm_provider,
+        "active_llm_provider": active_provider,
         "llm_status": llm_status.get("active", "unknown"),
         "nvidia_status": llm_status.get("nvidia", "unknown"),
         "groq_status": llm_status.get("groq", "unknown"),

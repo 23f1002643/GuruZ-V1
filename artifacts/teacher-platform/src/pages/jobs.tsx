@@ -38,6 +38,7 @@ export default function JobsPage() {
       }, 3000);
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [jobs, refetch]);
 
   const filteredJobs = jobs?.filter((job) =>

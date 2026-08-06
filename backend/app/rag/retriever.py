@@ -28,7 +28,7 @@ def get_chroma_status() -> str:
     try:
         client = _get_client()
         client.heartbeat()
-        return "available"
+        return "ok"
     except Exception as e:
         return f"unavailable: {e}"
 

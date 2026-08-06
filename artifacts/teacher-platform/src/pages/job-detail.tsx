@@ -36,11 +36,12 @@ export default function JobDetailPage() {
     query: {
       enabled: !!jobId,
       queryKey: getGetJobQueryKey(jobId),
-      refetchInterval: (data) => {
+      refetchInterval: (query) => {
         // Stop refetching when job is in terminal state
-        if (!data) return false;
+        const jobData = (query as any)?.state?.data as Job | undefined;
+        if (!jobData) return false;
         const terminalStates = ['completed', 'failed', 'cancelled'];
-        return terminalStates.includes(data.status) ? false : 3000;
+        return terminalStates.includes(jobData.status) ? false : 3000;
       },
     },
   });

@@ -11,6 +11,7 @@ export interface ValidationReport {
   is_valid: boolean;
   overall_score: number;
   hallucination_score: number;
+  completeness_score: number;
   schema_valid: boolean;
   all_objectives_covered: boolean;
   source_chunks_verified: boolean;

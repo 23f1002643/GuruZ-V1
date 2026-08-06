@@ -3,9 +3,10 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Link } from 'wouter';
 import { formatDate, formatDuration } from '@/lib/utils';
-import { Package, ListChecks, BookOpen, Clock, Server, Database, Brain, Upload } from 'lucide-react';
+import { Package, ListChecks, BookOpen, Clock, Server, Database, Brain, Upload, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -218,22 +219,31 @@ export default function Dashboard() {
                     {
                       icon: Server,
                       label: 'API Server',
+                      tooltip: 'Checks whether the backend API is reachable and responding.',
                       ok: health?.status === 'ok',
                       value: health?.status ?? 'checking…',
                     },
                     {
                       icon: Database,
                       label: 'ChromaDB',
+                      tooltip: 'Verifies the embedded vector store and connection health.',
                       ok: health?.chromadb_status === 'ok',
                       value: health?.chromadb_status ?? 'checking…',
                     },
                     {
                       icon: Brain,
                       label: 'LLM',
+                      tooltip: 'Reports the active LLM provider and whether an AI model is reachable.',
                       ok: isLlmOk,
-                      value: health?.llm_provider ?? 'checking…',
+                      value:
+                        health?.llm_status || health?.llm_provider || 'checking…',
+                      sub:
+                        health?.llm_status && health?.llm_provider &&
+                        health.llm_status !== health.llm_provider
+                          ? `configured=${health.llm_provider}`
+                          : undefined,
                     },
-                  ].map(({ icon: Icon, label, ok, value }) => (
+                  ].map(({ icon: Icon, label, ok, value, tooltip, sub }) => (
                     <div
                       key={label}
                       className="flex items-center justify-between py-2 border-b border-border last:border-0"
@@ -246,11 +256,29 @@ export default function Dashboard() {
                           )}
                         />
                         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-sm">{label}</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 text-sm text-left"
+                            >
+                              <span>{label}</span>
+                              <Info className="h-3 w-3 text-muted-foreground" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>{tooltip}</TooltipContent>
+                        </Tooltip>
                       </div>
-                      <span className="text-xs font-mono text-muted-foreground capitalize">
-                        {value}
-                      </span>
+                      <div className="text-right">
+                        <div className="text-xs font-mono text-muted-foreground capitalize">
+                          {value}
+                        </div>
+                        {sub && (
+                          <div className="text-xxs text-muted-foreground/80 mt-0.5">
+                            {sub}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
 

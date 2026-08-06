@@ -233,6 +233,7 @@ class ValidationReport(BaseModel):
     is_valid: bool = False
     overall_score: float = 0.0
     hallucination_score: float = 0.0
+    completeness_score: float = 0.0
     schema_valid: bool = False
     all_objectives_covered: bool = False
     source_chunks_verified: bool = False
