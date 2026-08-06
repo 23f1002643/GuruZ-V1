@@ -6,11 +6,14 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # LLM Configuration
-    llm_provider: Literal["auto", "groq", "ollama"] = "groq"
+    llm_provider: Literal["auto", "nvidia", "groq"] = "nvidia"
+
+    nvidia_api_key: str = ""
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_model: str = "meta/llama-3.3-70b-instruct"
+
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3"
 
     # ChromaDB
     chroma_persist_dir: str = "./data/chroma"

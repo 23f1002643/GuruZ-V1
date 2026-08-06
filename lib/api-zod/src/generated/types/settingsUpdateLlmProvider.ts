@@ -14,6 +14,6 @@ export type SettingsUpdateLlmProvider = typeof SettingsUpdateLlmProvider[keyof t
 
 export const SettingsUpdateLlmProvider = {
   auto: 'auto',
-  gemini: 'gemini',
-  ollama: 'ollama',
+  nvidia: 'nvidia',
+  groq: 'groq',
 } as const;

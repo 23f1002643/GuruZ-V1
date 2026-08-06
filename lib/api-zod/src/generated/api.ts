@@ -450,10 +450,9 @@ export const DeleteLogResponse = zod.object({
  * @summary Get current platform settings
  */
 export const GetSettingsResponse = zod.object({
-  "llm_provider": zod.enum(['auto', 'gemini', 'ollama']),
-  "ollama_model": zod.string(),
-  "ollama_base_url": zod.string(),
-  "gemini_model": zod.string(),
+  "llm_provider": zod.enum(['auto', 'nvidia', 'groq']),
+  "nvidia_model": zod.string(),
+  "groq_model": zod.string(),
   "chunk_size": zod.number(),
   "chunk_overlap": zod.number(),
   "max_retry_attempts": zod.number(),
@@ -466,10 +465,9 @@ export const GetSettingsResponse = zod.object({
  * @summary Update platform settings
  */
 export const UpdateSettingsBody = zod.object({
-  "llm_provider": zod.union([zod.literal('auto'),zod.literal('gemini'),zod.literal('ollama'),zod.literal(null)]).nullish(),
-  "ollama_model": zod.string().nullish(),
-  "ollama_base_url": zod.string().nullish(),
-  "gemini_model": zod.string().nullish(),
+  "llm_provider": zod.union([zod.literal('auto'),zod.literal('nvidia'),zod.literal('groq'),zod.literal(null)]).nullish(),
+  "nvidia_model": zod.string().nullish(),
+  "groq_model": zod.string().nullish(),
   "chunk_size": zod.number().nullish(),
   "chunk_overlap": zod.number().nullish(),
   "max_retry_attempts": zod.number().nullish(),
@@ -478,10 +476,9 @@ export const UpdateSettingsBody = zod.object({
 })
 
 export const UpdateSettingsResponse = zod.object({
-  "llm_provider": zod.enum(['auto', 'gemini', 'ollama']),
-  "ollama_model": zod.string(),
-  "ollama_base_url": zod.string(),
-  "gemini_model": zod.string(),
+  "llm_provider": zod.enum(['auto', 'nvidia', 'groq']),
+  "nvidia_model": zod.string(),
+  "groq_model": zod.string(),
   "chunk_size": zod.number(),
   "chunk_overlap": zod.number(),
   "max_retry_attempts": zod.number(),

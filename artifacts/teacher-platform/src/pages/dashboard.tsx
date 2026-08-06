@@ -73,7 +73,7 @@ export default function Dashboard() {
   const jobs = Array.isArray(recentJobs) ? recentJobs : [];
 
   const isLlmOk =
-    health?.llm_status === 'gemini' || health?.llm_status === 'ollama';
+    health?.llm_status === 'nvidia' || health?.llm_status === 'groq';
 
   return (
     <div className="flex-1 overflow-auto">

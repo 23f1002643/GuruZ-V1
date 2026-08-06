@@ -1153,14 +1153,10 @@ components:
       properties:
         llm_provider:
           type: string
-          enum: ["auto", "grok", "gemini", "ollama"]
-        grok_model:
+          enum: ["auto", "nvidia", "groq"]
+        nvidia_model:
           type: string
-        ollama_model:
-          type: string
-        ollama_base_url:
-          type: string
-        gemini_model:
+        groq_model:
           type: string
         chunk_size:
           type: number
@@ -1174,9 +1170,8 @@ components:
           type: string
       required:
         - llm_provider
-        - ollama_model
-        - ollama_base_url
-        - gemini_model
+        - nvidia_model
+        - groq_model
         - chunk_size
         - chunk_overlap
         - max_retry_attempts
@@ -1188,14 +1183,10 @@ components:
       properties:
         llm_provider:
           type: ["string", "null"]
-          enum: ["auto", "grok", "gemini", "ollama", null]
-        grok_model:
+          enum: ["auto", "nvidia", "groq", null]
+        nvidia_model:
           type: ["string", "null"]
-        ollama_model:
-          type: ["string", "null"]
-        ollama_base_url:
-          type: ["string", "null"]
-        gemini_model:
+        groq_model:
           type: ["string", "null"]
         chunk_size:
           type: ["number", "null"]

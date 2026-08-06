@@ -9,9 +9,8 @@ import type { SettingsLlmProvider } from './settingsLlmProvider';
 
 export interface Settings {
   llm_provider: SettingsLlmProvider;
-  ollama_model: string;
-  ollama_base_url: string;
-  gemini_model: string;
+  nvidia_model: string;
+  groq_model: string;
   chunk_size: number;
   chunk_overlap: number;
   max_retry_attempts: number;

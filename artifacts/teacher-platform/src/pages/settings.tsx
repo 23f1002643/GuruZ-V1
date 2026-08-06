@@ -68,7 +68,7 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between py-2 border-b border-border">
                     <div className="flex items-center gap-3">
                       {statusDot(
-                        health?.llm_status === 'grok' || health?.llm_status === 'gemini' || health?.llm_status === 'ollama'
+                        health?.llm_status === 'nvidia' || health?.llm_status === 'groq'
                       )}
                       <span className="text-sm font-medium">LLM Provider</span>
                     </div>
@@ -109,10 +109,8 @@ export default function SettingsPage() {
               ) : (
                 <div className="space-y-3 text-sm">
                   <Row label="Provider" value={settings?.llm_provider} />
-                  <Row label="Grok Model" value={settings?.grok_model} />
-                  <Row label="Gemini Model" value={settings?.gemini_model} />
-                  <Row label="Ollama Model" value={settings?.ollama_model} />
-                  <Row label="Ollama URL" value={settings?.ollama_base_url} mono />
+                  <Row label="NVIDIA Model" value={settings?.nvidia_model} />
+                  <Row label="Groq Model" value={settings?.groq_model} />
                 </div>
               )}
             </CardContent>

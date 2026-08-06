@@ -11,11 +11,9 @@ export interface SettingsUpdate {
   /** @nullable */
   llm_provider?: SettingsUpdateLlmProvider;
   /** @nullable */
-  ollama_model?: string | null;
+  nvidia_model?: string | null;
   /** @nullable */
-  ollama_base_url?: string | null;
-  /** @nullable */
-  gemini_model?: string | null;
+  groq_model?: string | null;
   /** @nullable */
   chunk_size?: number | null;
   /** @nullable */

@@ -11,6 +11,6 @@ export type SettingsLlmProvider = typeof SettingsLlmProvider[keyof typeof Settin
 
 export const SettingsLlmProvider = {
   auto: 'auto',
-  gemini: 'gemini',
-  ollama: 'ollama',
+  nvidia: 'nvidia',
+  groq: 'groq',
 } as const;

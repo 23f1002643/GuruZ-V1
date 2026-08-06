@@ -9,7 +9,7 @@ groq==0.11.0
 langchain==0.3.13
 langchain-community==0.3.13
 langgraph==0.2.60
-langchain-ollama==0.2.2
+langchain-openai==0.2.14
 
 # RAG
 llama-index==0.12.3

@@ -14,9 +14,8 @@ export interface DetailedHealth {
   version: string;
   llm_provider: string;
   llm_status: string;
-  grok_status: string;
-  gemini_status: string;
-  ollama_status: string;
+  nvidia_status: string;
+  groq_status: string;
   chromadb_status: string;
   uptime_seconds: number;
   total_jobs: number;
@@ -432,17 +431,14 @@ export type SettingsLlmProvider = typeof SettingsLlmProvider[keyof typeof Settin
 
 export const SettingsLlmProvider = {
   auto: 'auto',
-  grok: 'grok',
-  gemini: 'gemini',
-  ollama: 'ollama',
+  nvidia: 'nvidia',
+  groq: 'groq',
 } as const;
 
 export interface Settings {
   llm_provider: SettingsLlmProvider;
-  grok_model: string;
-  ollama_model: string;
-  ollama_base_url: string;
-  gemini_model: string;
+  nvidia_model: string;
+  groq_model: string;
   chunk_size: number;
   chunk_overlap: number;
   max_retry_attempts: number;
@@ -458,22 +454,17 @@ export type SettingsUpdateLlmProvider = typeof SettingsUpdateLlmProvider[keyof t
 
 export const SettingsUpdateLlmProvider = {
   auto: 'auto',
-  grok: 'grok',
-  gemini: 'gemini',
-  ollama: 'ollama',
+  nvidia: 'nvidia',
+  groq: 'groq',
 } as const;
 
 export interface SettingsUpdate {
   /** @nullable */
   llm_provider?: SettingsUpdateLlmProvider;
   /** @nullable */
-  grok_model?: string | null;
+  nvidia_model?: string | null;
   /** @nullable */
-  ollama_model?: string | null;
-  /** @nullable */
-  ollama_base_url?: string | null;
-  /** @nullable */
-  gemini_model?: string | null;
+  groq_model?: string | null;
   /** @nullable */
   chunk_size?: number | null;
   /** @nullable */

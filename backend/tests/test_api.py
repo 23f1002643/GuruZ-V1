@@ -70,7 +70,7 @@ async def test_get_settings(client):
     assert response.status_code == 200
     data = response.json()
     assert "llm_provider" in data
-    assert "ollama_model" in data
+    assert "nvidia_model" in data
 
 
 @pytest.mark.asyncio
