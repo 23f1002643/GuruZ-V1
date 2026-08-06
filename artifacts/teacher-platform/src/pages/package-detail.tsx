@@ -549,17 +549,6 @@ export default function PackageDetailPage() {
                             {formatPercent(completenessScore)}
                           </div>
                         </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground mb-1">Valid</div>
-                          <div
-                            className={cn(
-                              'text-2xl font-display font-bold',
-                              pkg.validation_report.is_valid ? 'text-emerald-400' : 'text-red-400'
-                            )}
-                          >
-                            {pkg.validation_report.is_valid ? 'Yes' : 'No'}
-                          </div>
-                        </div>
                       </div>
                     </CardContent>
                   </Card>
