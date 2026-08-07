@@ -27,6 +27,22 @@ async def lifespan(app: FastAPI):
     pathlib.Path(app_settings.upload_dir).mkdir(parents=True, exist_ok=True)
     pathlib.Path(app_settings.packages_dir).mkdir(parents=True, exist_ok=True)
 
+    # ── KEY FIX ─────────────────────────────────────────────────────────────
+    # Pre-load the sentence-transformers embedding model BEFORE the first
+    # request arrives.  On Render's free tier, loading ~90 MB of ML model
+    # mid-request causes a sudden memory spike that triggers the OOM killer
+    # and restarts the server.  Loading it once at startup keeps memory
+    # stable and prevents the restart.
+    # ────────────────────────────────────────────────────────────────────────
+    logger.info("preloading_embedding_model")
+    try:
+        from app.rag.embedder import warm_up_embedder_async
+        await warm_up_embedder_async()
+        logger.info("embedding_model_ready")
+    except Exception as exc:
+        # Non-fatal: hash-based fallback will be used instead
+        logger.warning("embedding_model_preload_failed", error=str(exc))
+
     logger.info("server_ready")
     yield
     logger.info("shutdown")
@@ -53,7 +69,6 @@ BASE_PATH = os.environ.get("BASE_PATH", "/api")
 
 
 def _with_base(router, prefix: str = ""):
-    """Mount a router under BASE_PATH."""
     app.include_router(router, prefix=BASE_PATH + prefix)
 
 
