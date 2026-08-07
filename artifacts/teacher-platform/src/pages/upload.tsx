@@ -165,8 +165,17 @@ export default function UploadPage() {
       formData.append('file', file);
       formData.append('assessment_config', JSON.stringify(assessmentConfig));
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
+      // const response = await fetch('/api/upload', {
+      //   method: 'POST',
+      //   body: formData,
+      // });
+      const API_BASE =
+        import.meta.env.DEV
+          ? ""
+          : (import.meta.env.VITE_API_URL || "https://guruz-backend.onrender.com");
+    
+      const response = await fetch(`${API_BASE}/api/upload`, {
+        method: "POST",
         body: formData,
       });
 
