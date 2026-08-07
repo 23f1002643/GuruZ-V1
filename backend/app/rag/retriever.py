@@ -19,7 +19,9 @@ def _get_client():
         settings = get_settings()
         persist_dir = Path(settings.chroma_persist_dir)
         persist_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("creating_chroma_client")  # temp
         _chroma_client = chromadb.PersistentClient(path=str(persist_dir))
+        logger.info("chroma_client_ready") # temp
         logger.info("chromadb_initialized", persist_dir=str(persist_dir))
     return _chroma_client
 
@@ -32,47 +34,65 @@ def get_chroma_status() -> str:
     except Exception as e:
         return f"unavailable: {e}"
 
-
 def index_chunks(job_id: str, chunks: list[TextChunk]) -> str:
     """Index all chunks from a document into a dedicated ChromaDB collection."""
-    collection_name = f"doc_{job_id.replace('-', '_')}"
-    client = _get_client()
+    logger.info("index_chunks_started", job_id=job_id, chunks=len(chunks)) #temp
 
-    # Delete existing collection for this job (re-index)
     try:
-        client.delete_collection(collection_name)
-    except Exception:
-        pass
-
-    collection = client.create_collection(
-        name=collection_name,
-        metadata={"hnsw:space": "cosine"},
-    )
-
-    if not chunks:
-        return collection_name
-
-    texts = [c.text for c in chunks]
-    embeddings = embed_texts(texts)
-    ids = [c.chunk_id for c in chunks]
-    metadatas = [
-        {"char_start": c.char_start, "char_end": c.char_end, "page_hint": c.page_hint}
-        for c in chunks
-    ]
-
-    # ChromaDB has a max batch size
-    batch_size = 100
-    for i in range(0, len(texts), batch_size):
-        collection.add(
-            ids=ids[i : i + batch_size],
-            embeddings=embeddings[i : i + batch_size],  # type: ignore[arg-type]
-            documents=texts[i : i + batch_size],
-            metadatas=metadatas[i : i + batch_size],
+        collection_name = f"doc_{job_id.replace('-', '_')}"
+        client = _get_client()
+    
+        logger.info("client_created")   #temp
+    
+        # Delete existing collection for this job (re-index)
+        try:
+            client.delete_collection(collection_name)
+        except Exception:
+            pass
+    
+        collection = client.create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"},
         )
-
-    logger.info("chunks_indexed", collection=collection_name, count=len(chunks))
-    return collection_name
-
+        logger.info("collection_created", collection=collection_name)  #temp
+    
+        if not chunks:
+            return collection_name
+    
+        texts = [c.text for c in chunks]
+    
+        logger.info("embedding_started")  #temp
+        embeddings = embed_texts(texts)
+        logger.info("embedding_finished")  #temp
+        ids = [c.chunk_id for c in chunks]
+        metadatas = [
+            {"char_start": c.char_start, "char_end": c.char_end, "page_hint": c.page_hint}
+            for c in chunks
+        ]
+    
+        # ChromaDB has a max batch size
+        batch_size = 100
+        for i in range(0, len(texts), batch_size):
+            logger.info("adding_vectors", count=len(texts)) # temp
+            collection.add(
+                ids=ids[i : i + batch_size],
+                embeddings=embeddings[i : i + batch_size],  # type: ignore[arg-type]
+                documents=texts[i : i + batch_size],
+                metadatas=metadatas[i : i + batch_size],
+            )
+    
+        logger.info("collection_add_finished")  #temp
+    
+        logger.info("chunks_indexed", collection=collection_name, count=len(chunks))
+        return collection_name
+    except Exception as e:
+        logger.exception(
+            "index_chunks_failed",
+            job_id=job_id,
+            error=str(e),
+        )
+        raise
+    
 
 def retrieve(job_id: str, query: str, top_k: int = 8) -> list[str]:
     """Retrieve the top-k most relevant chunks for a query."""
