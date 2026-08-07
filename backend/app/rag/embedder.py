@@ -22,7 +22,8 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_MODEL_NAME = "all-MiniLM-L6-v2"
+# _MODEL_NAME = "intfloat/multilingual-e5-small"
+_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 _FALLBACK_DIMENSIONS = 384
 
 _model = None
@@ -38,9 +39,9 @@ def _load_model():
             return _model
         _load_attempted = True
         try:
-            from sentence_transformers import SentenceTransformer  # type: ignore
+            from fastembed import TextEmbedding  # type: ignore
             logger.info("loading_embedding_model", model=_MODEL_NAME)
-            _model = SentenceTransformer(_MODEL_NAME)
+            _model = TextEmbedding(model_name=_MODEL_NAME)
             logger.info("embedding_model_loaded", model=_MODEL_NAME)
         except Exception as exc:
             logger.warning(
@@ -90,11 +91,14 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     model = _get_model()
     if model is None:
         return [_hash_embed(t) for t in texts]
-    return model.encode(texts, show_progress_bar=False, convert_to_list=True)  # type: ignore
+
+    embeddings = list(model.embed(texts))
+    return [e.tolist() for e in embeddings]
 
 
 def embed_query(query: str) -> list[float]:
     model = _get_model()
     if model is None:
         return _hash_embed(query)
-    return model.encode([query], show_progress_bar=False, convert_to_list=True)[0]  # type: ignore
+
+    return list(model.query_embed(query))[0].tolist()
