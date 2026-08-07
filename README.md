@@ -14,7 +14,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
-[**🚀 Live Demo**](https://guruz-v1-teacher-platform.vercel.app/) · [**Sample Outputs**](./samples/) · [**API Docs**](#-api-reference) · [**Quick Start**](#-running-locally)
+[**🚀 Live Demo**](https://guruz-v1-teacher-platform.vercel.app/) · [**Sample Outputs**](https://github.com/23f1002643/GuruZ-V1/blob/main/Output%20Sample.zip) · [**API Docs**](#-api-reference) · [**Quick Start**](#-running-locally)
 
 </div>
 
