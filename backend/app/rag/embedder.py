@@ -49,7 +49,9 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     model = _get_model()
     if model is None:
         return [_hash_embed(text) for text in texts]
+    logger.info("encoding_started", chunks=len(texts)) #temp
     embeddings = model.encode(texts, show_progress_bar=False, convert_to_list=True)
+    logger.info("encoding_finished")  #temp
     return embeddings  # type: ignore[return-value]
 
 
