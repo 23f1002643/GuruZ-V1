@@ -21,7 +21,12 @@ def _get_model():
             logger.warning("sentence_transformers_unavailable_using_hash_embeddings")
             return None
         logger.info("loading_embedding_model", model=_MODEL_NAME)
+
+        logger.info("creating_sentence_transformer")  # temp
+        
         _model = SentenceTransformer(_MODEL_NAME)
+
+        logger.info("sentence_transformer_created")   #temp
         logger.info("embedding_model_loaded", model=_MODEL_NAME)
     return _model
 
